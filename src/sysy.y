@@ -35,11 +35,11 @@ using namespace std;
 // lexer 返回的所有 token 种类的声明
 // 注意 IDENT 和 INT_CONST 会返回 token 的值, 分别对应 str_val 和 int_val
 %token INT RETURN
-%token <str_val> IDENT UNARYOP ADDOP MULOP
+%token <str_val> IDENT UNARYOP ADDOP MULOP RELOP EQOP LOROP LANDOP
 %token <int_val> INT_CONST
 
 // 非终结符的类型定义
-%type <ast_val> FuncDef FuncType Block Stmt Exp UnaryExp PrimaryExp MulExp AddExp
+%type <ast_val> FuncDef FuncType Block Stmt Exp UnaryExp PrimaryExp MulExp AddExp RelExp EqExp LAndExp LOrExp
 %type <int_val> Number
 
 %%
@@ -94,9 +94,9 @@ Number
   ;
 
 Exp
-  : AddExp {
+  : LOrExp {
     auto ast = new ExpAST();
-    ast->add_exp = unique_ptr<BaseAST>($1);
+    ast->lor_exp = unique_ptr<BaseAST>($1);
     $$ = ast;
   }
   ;
@@ -152,7 +152,60 @@ AddExp
     auto mul_exp = unique_ptr<BaseAST>($3);
     $$ = new AddExpAST(add_exp, *op, mul_exp);
   }
+  ;
 
+RelExp
+  : AddExp {
+    auto add_exp = unique_ptr<BaseAST>($1);
+    $$ = new RelExpAST(add_exp);
+  }
+  | RelExp RELOP AddExp {
+    cout << "sysy.y debug rel_exp" << endl;
+    auto rel_exp = unique_ptr<BaseAST>($1);
+    auto op = unique_ptr<string>($2);
+    auto add_exp = unique_ptr<BaseAST>($3);
+    $$ = new RelExpAST(rel_exp, *op, add_exp);
+  }
+  ;
+
+EqExp
+  : RelExp {
+    auto rel_exp = unique_ptr<BaseAST>($1);
+    $$ = new EqExpAST(rel_exp);
+  }
+  | EqExp EQOP RelExp {
+    auto eq_exp = unique_ptr<BaseAST>($1);
+    auto op = unique_ptr<string>($2);
+    auto rel_exp = unique_ptr<BaseAST>($3);
+    $$ = new EqExpAST(eq_exp, *op, rel_exp);
+  }
+  ;
+
+LAndExp
+  : EqExp {
+    auto eq_exp = unique_ptr<BaseAST>($1);
+    $$ = new LAndExpAST(eq_exp);
+  }
+  | LAndExp LANDOP EqExp {
+    auto land_exp = unique_ptr<BaseAST>($1);
+    auto op = unique_ptr<string>($2);
+    auto eq_exp = unique_ptr<BaseAST>($3);
+    $$ = new LAndExpAST(land_exp, *op, eq_exp);
+  }
+  ;
+
+LOrExp
+  : LAndExp {
+    auto land_exp = unique_ptr<BaseAST>($1);
+    $$ = new LOrExpAST(land_exp);
+  }
+  | LOrExp LOROP LAndExp {
+    auto lor_exp = unique_ptr<BaseAST>($1);
+    auto op = unique_ptr<string>($2);
+    auto land_exp = unique_ptr<BaseAST>($3);
+    $$ = new LOrExpAST(lor_exp, *op, land_exp);
+  }
+  ;
 %%
 
 // 定义错误处理函数, 其中第二个参数是错误信息
