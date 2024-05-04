@@ -45,16 +45,43 @@ public:
   }
 };
 
+/* 
+Decl          ::= ConstDecl;
+ConstDecl     ::= "const" BType ConstDefList  ";";
+ConstDefList  ::= ConstDefList "," ConstDef | ConstDef ;
+BType         ::= "int";
+ConstDef      ::= IDENT "=" ConstInitVal;
+ConstInitVal  ::= ConstExp;
+
+Block         ::= "{" BlockItemList "}";
+BlockItemList ::= BlockItemList BlockItem | ε;
+BlockItem     ::= Decl | Stmt;
+
+LVal          ::= IDENT;
+PrimaryExp    ::= "(" Exp ")" | LVal | Number;
+
+ConstExp      ::= Exp;
+ */
+
+class LValAST : public BaseAST {
+public:
+  std::string ident;
+
+  LValAST(std::string &_ident) : ident(_ident) {}
+
+  void Dump() const override {
+    std::cout << "LValAST { " << ident << " }";
+  }
+
+};
+
 // PrimaryExpAST
 class PrimaryExpAST : public BaseAST {
 public:
-  enum class Type { EXP, NUMBER } type;
-  std::unique_ptr<BaseAST> exp;
+  enum class Type { EXP, NUMBER, LVAL } type;
+  std::unique_ptr<BaseAST> exp_or_lval;
   int number;
-  PrimaryExpAST(std::unique_ptr<BaseAST> &_exp) {
-    type = Type::EXP;
-    exp = std::move(_exp);
-  }
+  PrimaryExpAST() {}
   PrimaryExpAST(int _number) {
     type = Type::NUMBER;
     number = _number;
@@ -64,10 +91,14 @@ public:
     std::cout << "PrimaryExpAST { ";
     switch (type) {
       case Type::EXP:
-        exp->Dump();
+        exp_or_lval->Dump();
         break;
       case Type::NUMBER:
         std::cout << number;
+        break;
+      case Type::LVAL:
+        exp_or_lval->Dump();
+        break;
       default:
         break;
     }
@@ -159,14 +190,12 @@ public:
   RelExpAST(std::unique_ptr<BaseAST> &_add_exp) {
     type = Type::ADDEXP;
     add_exp = std::move(_add_exp);
-    std::cout << "debug: RelExpAST::ADDEXP\n";
   }
   RelExpAST(std::unique_ptr<BaseAST> &_rel_exp, std::string &_op, std::unique_ptr<BaseAST> &_add_exp) {
     type = Type::RELEXP;
     rel_exp = std::move(_rel_exp);
     op = _op;
     add_exp = std::move(_add_exp);
-    std::cout << "debug: RelExpAST::RELEXP\n";
   }
 
   void Dump() const override {

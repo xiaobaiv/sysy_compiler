@@ -32,7 +32,8 @@ int main(int argc, const char *argv[]) {
   assert(!ret);
 
   // 输出解析得到的 AST, 其实就是个字符串
-  ast->Dump();
   cout << endl;
+  ast->Dump();
+  cout << endl << endl;
   return 0;
 }

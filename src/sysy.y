@@ -9,12 +9,17 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <stack>
 #include "/root/compiler/sysy-make-template/ast/ast.hh"
 // 声明 lexer 函数和错误处理函数
 int yylex();
 void yyerror(std::unique_ptr<BaseAST> &ast, const char *s);
 
 using namespace std;
+
+/* enum class ListType { CONSTDEF, DECL, STMT }; */
+stack<List> global_stack;
+
 
 %}
 
@@ -34,12 +39,14 @@ using namespace std;
 
 // lexer 返回的所有 token 种类的声明
 // 注意 IDENT 和 INT_CONST 会返回 token 的值, 分别对应 str_val 和 int_val
-%token INT RETURN
+%token INT RETURN CONST
 %token <str_val> IDENT UNARYOP ADDOP MULOP RELOP EQOP LOROP LANDOP
 %token <int_val> INT_CONST
 
 // 非终结符的类型定义
-%type <ast_val> FuncDef FuncType Block Stmt Exp UnaryExp PrimaryExp MulExp AddExp RelExp EqExp LAndExp LOrExp
+%type <ast_val> FuncDef FuncType Block Stmt BlockItem BlockItemList LVal ConstExp 
+%type <ast_val> Exp UnaryExp PrimaryExp MulExp AddExp RelExp EqExp LAndExp LOrExp
+%type <ast_val> Decl ConstDecl BType ConstDef ConstDefList ConstInitVal
 %type <int_val> Number
 
 %%
@@ -70,12 +77,54 @@ FuncType
     $$ = ast;
   }
   ;
+/* 
+Decl          ::= ConstDecl;
+ConstDecl     ::= "const" BType ConstDefList  ";";
+ConstDefList  ::= ConstDefList "," ConstDef | ConstDef ;
+BType         ::= "int";
+ConstDef      ::= IDENT "=" ConstInitVal;
+ConstInitVal  ::= ConstExp;
 
+Block         ::= "{" BlockItemList "}";
+BlockItemList ::= BlockItemList BlockItem | ε;
+BlockItem     ::= Decl | Stmt;
+
+LVal          ::= IDENT;
+PrimaryExp    ::= "(" Exp ")" | LVal | Number;
+
+ConstExp      ::= Exp;
+ */
 Block
-  : '{' Stmt '}' {
-    auto ast = new BlockAST();
-    ast->stmt = unique_ptr<BaseAST>($2);
+  : '{' {
+    global_stack.push(List());
+  } BlockItemList '}' {
+    $$ = new BlockAST(global_stack.top());
+    global_stack.pop();
+  }
+  | '{' '}' {
+    $$ = new BlockAST();
+  }
+  ;
+
+BlockItemList
+  :
+  BlockItemList BlockItem 
+  | BlockItem
+  ;
+
+BlockItem
+  : Decl {
+    auto decl = unique_ptr<BaseAST>($1);
+    auto ast = new BlockItemAST(decl, BlockItemAST::Type::DECL);
     $$ = ast;
+    global_stack.top().emplace_back(ListType::BLOCKITEM, std::move(ast));
+  }
+  | Stmt {
+    auto stmt = unique_ptr<BaseAST>($1);
+    auto ast = new BlockItemAST(stmt, BlockItemAST::Type::STMT);
+    $$ = ast;
+    //global_stack.top().emplace_back(ListType::STMT, std::move(stmt));
+    global_stack.top().emplace_back(ListType::BLOCKITEM, std::move(ast));
   }
   ;
 
@@ -120,11 +169,19 @@ UnaryExp
 
 PrimaryExp
   : '(' Exp ')' {
-    auto exp = unique_ptr<BaseAST>($2);
-    $$ = new PrimaryExpAST(exp);
+    auto ast = new PrimaryExpAST();
+    ast->type = PrimaryExpAST::Type::EXP;
+    ast->exp_or_lval = unique_ptr<BaseAST>($2);
+    $$ = ast;
   }
   | Number {
     $$ = new PrimaryExpAST($1);
+  }
+  | LVal {
+    auto ast = new PrimaryExpAST();
+    ast->type = PrimaryExpAST::Type::LVAL;
+    ast->exp_or_lval = unique_ptr<BaseAST>($1);
+    $$ = ast;
   }
   ;
 
@@ -160,7 +217,6 @@ RelExp
     $$ = new RelExpAST(add_exp);
   }
   | RelExp RELOP AddExp {
-    cout << "sysy.y debug rel_exp" << endl;
     auto rel_exp = unique_ptr<BaseAST>($1);
     auto op = unique_ptr<string>($2);
     auto add_exp = unique_ptr<BaseAST>($3);
@@ -204,6 +260,67 @@ LOrExp
     auto op = unique_ptr<string>($2);
     auto land_exp = unique_ptr<BaseAST>($3);
     $$ = new LOrExpAST(lor_exp, *op, land_exp);
+  }
+  ;
+
+Decl
+  : ConstDecl {
+    auto const_decl = unique_ptr<BaseAST>($1);
+    $$ = new DeclAST(const_decl);
+  }
+  ;
+
+ConstDecl 
+  : CONST BType {
+    global_stack.push(List());
+  } ConstDefList ';' {
+    auto btype = unique_ptr<BaseAST>($2);
+    $$ = new ConstDeclAST(global_stack.top(), btype);
+    global_stack.pop();
+  }
+  ;
+
+ConstDefList
+  : ConstDefList ',' ConstDef {
+    auto const_def = unique_ptr<BaseAST>($3);
+    global_stack.top().emplace_back(ListType::CONSTDEF, std::move(const_def));
+  }
+  | ConstDef {
+    auto const_def = unique_ptr<BaseAST>($1);
+    global_stack.top().emplace_back(ListType::CONSTDEF, std::move(const_def));
+  }
+
+BType
+  : INT {
+    $$ = new BTypeAST("int");
+  }
+  ;
+
+ConstDef
+  : IDENT '=' ConstInitVal {
+    auto ident = *unique_ptr<string>($1);
+    auto const_init_val = unique_ptr<BaseAST>($3);
+    $$ = new ConstDefAST(ident, const_init_val);
+  }
+  ;
+
+ConstInitVal
+  : ConstExp {
+    auto const_exp = unique_ptr<BaseAST>($1);
+    $$ = new ConstInitValAST(const_exp);
+  }
+  ;
+
+LVal
+  : IDENT {
+    $$ = new LValAST(*unique_ptr<string>($1));
+  }
+  ;
+
+ConstExp
+  : Exp {
+    auto exp = unique_ptr<BaseAST>($1);
+    $$ = new ConstExpAST(exp);
   }
   ;
 %%

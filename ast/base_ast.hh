@@ -2,6 +2,9 @@
 #include <string>
 #include <iostream>
 #include <memory>
+#include <vector>
+enum class ListType { CONSTDEF, DECL, STMT, BLOCKITEM };
+
 // 所有 AST 的基类
 class BaseAST {
  public:
@@ -22,3 +25,24 @@ class CompUnitAST : public BaseAST {
     std::cout << " }";
   }
 };
+
+
+
+/* 
+Decl          ::= ConstDecl;
+ConstDecl     ::= "const" BType ConstDefList  ";";
+ConstDefList  ::= ConstDefList "," ConstDef | ConstDef ;
+BType         ::= "int";
+ConstDef      ::= IDENT "=" ConstInitVal;
+ConstInitVal  ::= ConstExp;
+
+Block         ::= "{" {BlockItem} "}";
+BlockItem     ::= Decl | Stmt;
+
+LVal          ::= IDENT;
+PrimaryExp    ::= "(" Exp ")" | LVal | Number;
+
+ConstExp      ::= Exp;
+ */
+
+typedef std::vector<std::pair<ListType, std::unique_ptr<BaseAST>>> List;

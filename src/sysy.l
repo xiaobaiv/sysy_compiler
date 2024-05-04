@@ -45,6 +45,7 @@ LOrOp          \|\|
 
 "int"           { return INT; }
 "return"        { return RETURN; }
+"const"         { return CONST; }
 
 {Identifier}    { yylval.str_val = new string(yytext); return IDENT; }
 
@@ -53,9 +54,9 @@ LOrOp          \|\|
 {Hexadecimal}   { yylval.int_val = strtol(yytext, nullptr, 0); return INT_CONST; }
 
 {UnaryOp}       { yylval.str_val = new string(yytext); return UNARYOP; }
-{AddOp}         { yylval.str_val = new string(yytext); cout << "sysy.l debug: AddOp\n"; return ADDOP; }
+{AddOp}         { yylval.str_val = new string(yytext); return ADDOP; }
 {MulOp}         { yylval.str_val = new string(yytext); return MULOP; }
-{RelOp}         { yylval.str_val = new string(yytext); cout << "sysy.l debug: RelOp\n"; return RELOP; }
+{RelOp}         { yylval.str_val = new string(yytext); return RELOP; }
 {EqOp}          { yylval.str_val = new string(yytext); return EQOP; }
 {LAndOp}        { yylval.str_val = new string(yytext); return LANDOP; }
 {LOrOp}         { yylval.str_val = new string(yytext); return LOROP; }
