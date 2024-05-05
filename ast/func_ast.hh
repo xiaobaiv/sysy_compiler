@@ -224,17 +224,15 @@ public:
 // Stmt 
 class StmtAST : public BaseAST {
 public:
-  enum class Type { ASSIGN, RETURN } type;
+  enum class Type { ASSIGN, RETURN, BLOCK, EXP } type;
+  enum class Option { EXP0, EXP1 } option;
   std::unique_ptr<BaseAST> lval;
   std::unique_ptr<BaseAST> exp;
-
+  std::unique_ptr<BaseAST> block;
   StmtAST(std::unique_ptr<BaseAST> &_lval, std::unique_ptr<BaseAST> &_exp) : lval(std::move(_lval)), exp(std::move(_exp)) {
     type = Type::ASSIGN;
   }
-  StmtAST(std::unique_ptr<BaseAST> &_exp) : exp(std::move(_exp)) {
-    type = Type::RETURN;
-  }
-
+  StmtAST() {std::cout << "debug: StmtAST construtor " << std::endl;}
   void Dump() const override {
     std::cout << "StmtAST { ";
     switch (type) {
@@ -244,7 +242,21 @@ public:
         exp->Dump();
         break;
       case Type::RETURN:
-        exp->Dump();
+        std::cout << "return ";
+        if(option == Option::EXP1) {
+          exp->Dump();
+        }
+        std::cout << ";";
+        break;
+      case Type::BLOCK:
+        block->Dump();
+        break;
+      case Type::EXP:
+        if(option == Option::EXP1) {
+          exp->Dump();
+        }
+        break;
+      default:
         break;
     }
     std::cout << " }";

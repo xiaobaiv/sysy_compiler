@@ -130,13 +130,42 @@ BlockItem
 
 Stmt
   : RETURN Exp ';' {
-    auto exp = unique_ptr<BaseAST>($2);
-    $$ = new StmtAST(exp);
+    auto ast = new StmtAST();
+    ast->type = StmtAST::Type::RETURN;
+    ast->option = StmtAST::Option::EXP1;
+    ast->exp = unique_ptr<BaseAST>($2);
+    $$ = ast;
   }
+  | RETURN ';' {
+    auto ast = new StmtAST();
+    ast->type = StmtAST::Type::RETURN;
+    ast->option = StmtAST::Option::EXP0;
+    $$ = ast;
+  }
+
   | LVal '=' Exp ';' {
     auto lval = unique_ptr<BaseAST>($1);
     auto exp = unique_ptr<BaseAST>($3);
     $$ = new StmtAST(lval, exp);
+  }
+  | Block {
+    auto ast = new StmtAST();
+    ast->type = StmtAST::Type::BLOCK;
+    ast->block = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | Exp ';' {
+    auto ast = new StmtAST();
+    ast->type = StmtAST::Type::EXP;
+    ast->option = StmtAST::Option::EXP1;
+    ast->exp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | ';' {
+    auto ast = new StmtAST();
+    ast->type = StmtAST::Type::EXP;
+    ast->option = StmtAST::Option::EXP0;
+    $$ = ast;
   }
   ;
 
