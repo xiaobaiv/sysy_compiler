@@ -224,7 +224,7 @@ public:
 // Stmt 
 class StmtAST : public BaseAST {
 public:
-  enum class Type { ASSIGN, RETURN, BLOCK, EXP ,IF, IFELSE} type;
+  enum class Type { ASSIGN, RETURN, BLOCK, EXP ,IF, IFELSE, WHILE, BREAK, CONTINUE} type;
   enum class Option { EXP0, EXP1 } option;
   std::unique_ptr<BaseAST> lval;
   std::unique_ptr<BaseAST> exp;
@@ -271,6 +271,18 @@ public:
         if_stmt->Dump();
         std::cout << " else ";
         else_stmt->Dump();
+        break;
+      case Type::WHILE:
+        std::cout << "while ";
+        exp->Dump();
+        std::cout << " do ";
+        if_stmt->Dump();
+        break;
+      case Type::BREAK:
+        std::cout << "break";
+        break;
+      case Type::CONTINUE:
+        std::cout << "continue";
         break;
       default:
         break;
