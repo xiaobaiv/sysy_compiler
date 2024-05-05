@@ -3,13 +3,25 @@
 
 class DeclAST : public BaseAST {
  public:
-    std::unique_ptr<BaseAST> const_decl;
-    DeclAST(std::unique_ptr<BaseAST> &_const_decl) : const_decl(std::move(_const_decl)) {}
+
+    std::unique_ptr<BaseAST> const_or_var_decl;
+    enum class Type { CONST, VAR } type;
+
+    DeclAST(std::unique_ptr<BaseAST> &_const_or_var_decl, Type _type) : const_or_var_decl(std::move(_const_or_var_decl)), type(_type) {}
+
     void Dump() const override {
         std::cout << "DeclAST { ";
-        const_decl->Dump();
+        switch (type) {
+            case Type::CONST:
+                const_or_var_decl->Dump();
+                break;
+            case Type::VAR:
+                const_or_var_decl->Dump();
+                break;
+        }
         std::cout << " }";
     }
+
 };
 
 // TODO: ConstDeclAST
@@ -28,6 +40,29 @@ public:
     std::cout << "ConstDeclAST { ";
     btype->Dump();
     for(auto &item : const_def_list) {
+      std::cout << ", ";
+      item.second->Dump();
+    }
+    std::cout << " }";
+  }
+};
+
+class VarDeclAST : public BaseAST {
+public:
+  List var_def_list;
+  std::unique_ptr<BaseAST> btype;
+
+  VarDeclAST(List &_var_def_list, std::unique_ptr<BaseAST> &_btype) {
+    for(auto &item : _var_def_list) {
+      var_def_list.push_back(std::make_pair(item.first, std::move(item.second)));
+    }
+    btype = std::move(_btype);
+  }
+  void Dump() const override {
+    std::cout << "VarDeclAST { ";
+    btype->Dump();
+    for(auto &item : var_def_list) {
+      std::cout << ", ";
       item.second->Dump();
     }
     std::cout << " }";
@@ -56,6 +91,35 @@ public:
     }
 };
 
+class VarDefAST : public BaseAST {
+public:
+  enum class Type { IDENT, IDENT_ASSIGN_INITVAL } type;
+  std::string ident;
+  std::unique_ptr<BaseAST> init_val;
+  VarDefAST(const std::string &_ident, std::unique_ptr<BaseAST> &_init_val) {
+    ident = _ident;
+    init_val = std::move(_init_val);
+    type = Type::IDENT_ASSIGN_INITVAL;
+  }
+  VarDefAST(const std::string &_ident) {
+    ident = _ident;
+    type = Type::IDENT;
+  }
+
+  void Dump() const override {
+    std::cout << "VarDefAST { ";
+    switch (type) {
+      case Type::IDENT:
+        std::cout << ident;
+        break;
+      case Type::IDENT_ASSIGN_INITVAL:
+        std::cout << ident << ", ";
+        init_val->Dump();
+        break;
+    }
+    std::cout << " }";
+  }
+};
 class ConstInitValAST : public BaseAST {
 public:
     std::unique_ptr<BaseAST> const_exp;
@@ -63,6 +127,18 @@ public:
     void Dump() const override {
         std::cout << "ConstInitValAST { ";
         const_exp->Dump();
+        std::cout << " }";
+    }
+
+};
+
+class InitValAST : public BaseAST {
+public:
+    std::unique_ptr<BaseAST> exp;
+    InitValAST(std::unique_ptr<BaseAST> &_exp) : exp(std::move(_exp)) {}
+    void Dump() const override {
+        std::cout << "InitValAST { ";
+        exp->Dump();
         std::cout << " }";
     }
 
@@ -148,11 +224,29 @@ public:
 // Stmt 
 class StmtAST : public BaseAST {
 public:
+  enum class Type { ASSIGN, RETURN } type;
+  std::unique_ptr<BaseAST> lval;
   std::unique_ptr<BaseAST> exp;
+
+  StmtAST(std::unique_ptr<BaseAST> &_lval, std::unique_ptr<BaseAST> &_exp) : lval(std::move(_lval)), exp(std::move(_exp)) {
+    type = Type::ASSIGN;
+  }
+  StmtAST(std::unique_ptr<BaseAST> &_exp) : exp(std::move(_exp)) {
+    type = Type::RETURN;
+  }
 
   void Dump() const override {
     std::cout << "StmtAST { ";
-    exp->Dump();
+    switch (type) {
+      case Type::ASSIGN:
+        lval->Dump();
+        std::cout << " = ";
+        exp->Dump();
+        break;
+      case Type::RETURN:
+        exp->Dump();
+        break;
+    }
     std::cout << " }";
   }
 };

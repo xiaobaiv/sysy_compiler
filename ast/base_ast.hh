@@ -3,7 +3,7 @@
 #include <iostream>
 #include <memory>
 #include <vector>
-enum class ListType { CONSTDEF, DECL, STMT, BLOCKITEM };
+enum class ListType { CONSTDEF,VARDEF ,DECL, STMT, BLOCKITEM };
 
 // 所有 AST 的基类
 class BaseAST {
