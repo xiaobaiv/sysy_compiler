@@ -224,15 +224,17 @@ public:
 // Stmt 
 class StmtAST : public BaseAST {
 public:
-  enum class Type { ASSIGN, RETURN, BLOCK, EXP } type;
+  enum class Type { ASSIGN, RETURN, BLOCK, EXP ,IF, IFELSE} type;
   enum class Option { EXP0, EXP1 } option;
   std::unique_ptr<BaseAST> lval;
   std::unique_ptr<BaseAST> exp;
   std::unique_ptr<BaseAST> block;
+  std::unique_ptr<BaseAST> if_stmt;
+  std::unique_ptr<BaseAST> else_stmt;
   StmtAST(std::unique_ptr<BaseAST> &_lval, std::unique_ptr<BaseAST> &_exp) : lval(std::move(_lval)), exp(std::move(_exp)) {
     type = Type::ASSIGN;
   }
-  StmtAST() {std::cout << "debug: StmtAST construtor " << std::endl;}
+  StmtAST() {}
   void Dump() const override {
     std::cout << "StmtAST { ";
     switch (type) {
@@ -255,6 +257,20 @@ public:
         if(option == Option::EXP1) {
           exp->Dump();
         }
+        break;
+      case Type::IF:
+        std::cout << "if ";
+        exp->Dump();
+        std::cout << " then ";
+        if_stmt->Dump();
+        break;
+      case Type::IFELSE:
+        std::cout << "if ";
+        exp->Dump();
+        std::cout << " then ";
+        if_stmt->Dump();
+        std::cout << " else ";
+        else_stmt->Dump();
         break;
       default:
         break;

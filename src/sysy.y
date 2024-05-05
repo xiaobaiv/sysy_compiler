@@ -39,7 +39,7 @@ stack<List> global_stack;
 
 // lexer 返回的所有 token 种类的声明
 // 注意 IDENT 和 INT_CONST 会返回 token 的值, 分别对应 str_val 和 int_val
-%token INT RETURN CONST
+%token INT RETURN CONST IF ELSE
 %token <str_val> IDENT UNARYOP ADDOP MULOP RELOP EQOP LOROP LANDOP
 %token <int_val> INT_CONST
 
@@ -165,6 +165,21 @@ Stmt
     auto ast = new StmtAST();
     ast->type = StmtAST::Type::EXP;
     ast->option = StmtAST::Option::EXP0;
+    $$ = ast;
+  }
+  | IF '(' Exp ')' Stmt {
+    auto ast = new StmtAST();
+    ast->type = StmtAST::Type::IF;
+    ast->exp = unique_ptr<BaseAST>($3);
+    ast->if_stmt = unique_ptr<BaseAST>($5);
+    $$ = ast;
+  }
+  | IF '(' Exp ')' Stmt ELSE Stmt {
+    auto ast = new StmtAST();
+    ast->type = StmtAST::Type::IFELSE;
+    ast->exp = unique_ptr<BaseAST>($3);
+    ast->if_stmt = unique_ptr<BaseAST>($5);
+    ast->else_stmt = unique_ptr<BaseAST>($7);
     $$ = ast;
   }
   ;
