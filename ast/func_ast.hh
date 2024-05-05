@@ -1,5 +1,26 @@
 #include "base_ast.hh"
 
+/* class OtherCompUnitAST : public BaseAST {
+ public:
+  enum class Option { COMPUNIT0, COMPUNIT1 } option;
+  std::unique_ptr<BaseAST> other_comp_unit;
+  std::unique_ptr<BaseAST> func_def;
+  OtherCompUnitAST() {}
+  void Dump() const override {
+    std::cout << "OtherCompUnitAST { ";
+    switch (option) {
+      case Option::COMPUNIT0:
+        func_def->Dump();
+        break;
+      case Option::COMPUNIT1:
+        other_comp_unit->Dump();
+        std::cout << ", ";
+        func_def->Dump();
+        break;
+    }
+    std::cout << " }";
+  }
+}; */
 
 class DeclAST : public BaseAST {
  public:
@@ -159,16 +180,21 @@ public:
 // FuncDef 也是 BaseAST
 class FuncDefAST : public BaseAST {
  public:
+ enum class Option { F0, F1} option;
   std::unique_ptr<BaseAST> func_type;
   std::string ident;
+  std::unique_ptr<BaseAST> func_fparams;
   std::unique_ptr<BaseAST> block;
 
   void Dump() const override {
     std::cout << "FuncDefAST { ";
     func_type->Dump();
-    std::cout<< ", " << ident << ", ";
+    std::cout << ", " << ident << ", ";
+    if(option == Option::F1) {
+      func_fparams->Dump();
+    }
     block->Dump();
-    std::cout << " }"; 
+    std::cout << " }";
   }
 };
 
@@ -248,7 +274,6 @@ public:
         if(option == Option::EXP1) {
           exp->Dump();
         }
-        std::cout << ";";
         break;
       case Type::BLOCK:
         block->Dump();
@@ -309,6 +334,52 @@ public:
       case Type::STMT:
         decl_or_stmt->Dump();
         break;
+    }
+    std::cout << " }";
+  }
+};
+
+class FuncFParamsAST : public BaseAST {
+public:
+  List fparams_list;
+  FuncFParamsAST(List &_fparams_list) {
+    for(auto &item : _fparams_list) {
+      fparams_list.push_back(std::make_pair(item.first, std::move(item.second)));
+    }
+  }
+  void Dump() const override {
+    std::cout << "FuncFParamsAST { ";
+    for(auto &item : fparams_list) {
+      item.second->Dump();
+    }
+    std::cout << " }";
+  }
+};
+
+class FuncFParamAST : public BaseAST {
+public:
+  std::string ident;
+  std::unique_ptr<BaseAST> btype;
+  FuncFParamAST(const std::string &_ident, std::unique_ptr<BaseAST> &_btype) : ident(_ident), btype(std::move(_btype)) {}
+  void Dump() const override {
+    std::cout << "FuncFParamAST { " << ident << ", ";
+    btype->Dump();
+    std::cout << " }";
+  }
+};
+
+class FuncRParamsAST : public BaseAST {
+public:
+  List exp_list;
+  FuncRParamsAST(List &_exp_list) {
+    for(auto &item : _exp_list) {
+      exp_list.push_back(std::make_pair(item.first, std::move(item.second)));
+    }
+  }
+  void Dump() const override {
+    std::cout << "FuncRParamsAST { ";
+    for(auto &item : exp_list) {
+      item.second->Dump();
     }
     std::cout << " }";
   }

@@ -20,7 +20,6 @@ using namespace std;
 /* enum class ListType { CONSTDEF, DECL, STMT }; */
 stack<List> global_stack;
 
-
 %}
 
 // 定义 parser 函数和错误处理函数的附加参数
@@ -39,26 +38,82 @@ stack<List> global_stack;
 
 // lexer 返回的所有 token 种类的声明
 // 注意 IDENT 和 INT_CONST 会返回 token 的值, 分别对应 str_val 和 int_val
-%token INT RETURN CONST IF ELSE WHILE BREAK CONTINUE
+%token INT VOID RETURN CONST IF ELSE WHILE BREAK CONTINUE
 %token <str_val> IDENT UNARYOP ADDOP MULOP RELOP EQOP LOROP LANDOP
 %token <int_val> INT_CONST
 
 // 非终结符的类型定义
-%type <ast_val> FuncDef FuncType Block Stmt BlockItem BlockItemList LVal ConstExp 
-%type <ast_val> Exp UnaryExp PrimaryExp MulExp AddExp RelExp EqExp LAndExp LOrExp
+%type <ast_val> FuncDef FuncType Block Stmt BlockItem BlockItemList FuncFParams FuncFParam FuncRPParams
+%type <ast_val> Exp UnaryExp PrimaryExp MulExp AddExp RelExp EqExp LAndExp LOrExp LVal ConstExp ExpList
 %type <ast_val> Decl ConstDecl BType ConstDef ConstDefList ConstInitVal
 %type <ast_val> VarDecl VarDef VarDefList InitVal
+%type <ast_val> CompUnit OtherCompUnit
 %type <int_val> Number
 
 %%
-
+/* 正确，但是有些冗余，多使用了一个other_comp_unit  
 CompUnit
-  : FuncDef {
+  : OtherCompUnit {
     auto comp_unit = make_unique<CompUnitAST>();
-    comp_unit->func_def = unique_ptr<BaseAST>($1);
+    comp_unit->other_comp_unit = unique_ptr<BaseAST>($1);
     ast = move(comp_unit);
   }
   ;
+
+OtherCompUnit
+  : FuncDef {
+    auto comp_unit = new OtherCompUnitAST();
+    comp_unit->func_def = unique_ptr<BaseAST>($1);
+    comp_unit->option = OtherCompUnitAST::Option::COMPUNIT0;
+    $$ = comp_unit;
+    cout << "debug, FucnDef" << endl;
+  }
+  | OtherCompUnit FuncDef {
+    auto comp_unit = new OtherCompUnitAST();
+    comp_unit->func_def = unique_ptr<BaseAST>($2);
+    comp_unit->other_comp_unit = unique_ptr<BaseAST>($1);
+    comp_unit->option = OtherCompUnitAST::Option::COMPUNIT1;
+    $$ = comp_unit;
+    cout << "debug, CompUnit" << endl;
+  }
+  ;  */
+
+// 优化后的 CompUnit, 使用ast作为暂时存储右侧的CompUnit的缓存
+  CompUnit
+  : FuncDef {
+    auto comp_unit = make_unique<CompUnitAST>();
+    comp_unit->func_def = unique_ptr<BaseAST>($1);
+    comp_unit->type = CompUnitAST::Type::FUNCDEF;
+    ast = move(comp_unit);
+  }
+  | CompUnit FuncDef {
+    auto comp_unit = make_unique<CompUnitAST>();
+    comp_unit->type = CompUnitAST::Type::COMPUNIT;
+    comp_unit->func_def = unique_ptr<BaseAST>($2);
+    comp_unit->other_comp_unit = move(ast);
+    ast = move(comp_unit);
+  }
+  ;  
+
+/* CompUnit 1. 设计unique_ptr 和 普通指针的转换，有问题。 2. 如果不设置 $$ ，会报错，因为调用$2
+  : FuncDef {
+    auto comp_unit = new CompUnitAST();
+    comp_unit->func_def = std::unique_ptr<BaseAST>($1);
+    comp_unit->type = CompUnitAST::Type::FUNCDEF;
+    ast = comp_unit;
+    cout << "debug, FucnDef" << endl;
+    $$ = ast;
+  }
+  | CompUnit FuncDef {
+    auto comp_unit = new CompUnitAST();
+    comp_unit->other_comp_unit = std::unique_ptr<BaseAST>($1);
+    comp_unit->func_def = std::unique_ptr<BaseAST>($2);
+    comp_unit->type = CompUnitAST::Type::COMPUNIT;
+    ast = comp_unit;
+    cout << "debug, CompUnit" << endl;
+    $$ = ast;
+  }
+  ; */
 
 FuncDef
   : FuncType IDENT '(' ')' Block {
@@ -66,15 +121,75 @@ FuncDef
     ast->func_type = unique_ptr<BaseAST>($1);
     ast->ident = *unique_ptr<string>($2);
     ast->block = unique_ptr<BaseAST>($5);
+    ast->option = FuncDefAST::Option::F0;
+    $$ = ast;
+  }
+  | FuncType IDENT '(' {
+    global_stack.push(List());
+  } FuncFParams ')' Block {
+
+    auto ast = new FuncDefAST();
+    ast->func_type = unique_ptr<BaseAST>($1);
+    ast->ident = *unique_ptr<string>($2);
+    auto _func_f_params = new FuncFParamsAST(global_stack.top());
+    global_stack.pop();
+    ast->func_fparams = unique_ptr<BaseAST>(_func_f_params);
+    ast->block = unique_ptr<BaseAST>($7);
+    ast->option = FuncDefAST::Option::F1;
     $$ = ast;
   }
   ;
 
+FuncFParams
+  : FuncFParam {
+    auto func_f_param = unique_ptr<BaseAST>($1);
+    global_stack.top().emplace_back(ListType::FUNCFPARAM, std::move(func_f_param));
+  }
+  | FuncFParams ',' FuncFParam {
+    auto func_f_param = unique_ptr<BaseAST>($3);
+    global_stack.top().emplace_back(ListType::FUNCFPARAM, std::move(func_f_param));
+  }
+  ;
+
+
+FuncFParam
+  : BType IDENT {
+    auto btype = unique_ptr<BaseAST>($1);
+    auto ident = *unique_ptr<string>($2);
+    $$ = new FuncFParamAST(ident, btype);
+  }
+  ;
+
+FuncRPParams
+  : {
+    global_stack.push(List());
+  } ExpList {
+    auto ast = new FuncRParamsAST(global_stack.top());
+    global_stack.pop();
+    $$ = ast;
+  }
+  ;
+
+ExpList
+  : ExpList ',' Exp {
+    auto exp = unique_ptr<BaseAST>($3);
+    global_stack.top().emplace_back(ListType::EXP, std::move(exp));
+  }
+  | Exp {
+    auto exp = unique_ptr<BaseAST>($1);
+    global_stack.top().emplace_back(ListType::EXP, std::move(exp));
+  }
+  ;
 // 同上, 不再解释
 FuncType
   : INT {
     auto ast = new FuncTypeAST();
     ast->type = "int";
+    $$ = ast;
+  }
+  | VOID {
+    auto ast = new FuncTypeAST();
+    ast->type = "void";
     $$ = ast;
   }
   ;
@@ -229,6 +344,22 @@ UnaryExp
     auto op = unique_ptr<string>($1);
     auto unary_exp = unique_ptr<BaseAST>($2);
     $$ = new UnaryExpAST(*op, unary_exp);
+  }
+  | IDENT '(' ')' {
+    auto ast = new UnaryExpAST();
+    ast->type = UnaryExpAST::Type::IDENT;
+    ast->option = UnaryExpAST::Option::F0;
+    ast->ident = *unique_ptr<string>($1);
+    $$ = ast;
+  }
+  | IDENT '(' FuncRPParams ')' {
+    auto ast = new UnaryExpAST();
+    ast->type = UnaryExpAST::Type::IDENT;
+    ast->option = UnaryExpAST::Option::F1;
+    ast->ident = *unique_ptr<string>($1);
+    ast->func_r_params = unique_ptr<BaseAST>($3);
+    $$ = ast;
+    cout << "debug" << endl;
   }
   ;
 

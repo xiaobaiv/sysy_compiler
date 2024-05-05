@@ -14,9 +14,12 @@ public:
 // UnaryExpAST 
 class UnaryExpAST : public BaseAST {
 public:
-  enum class Type { PRIMARY, OP } type;
+  enum class Type { PRIMARY, OP , IDENT} type;
+  enum class Option {F0, F1} option;
   std::unique_ptr<BaseAST> son_exp;
   std::string op;
+  std::string ident;
+  std::unique_ptr<BaseAST> func_r_params;
 
   UnaryExpAST(std::unique_ptr<BaseAST> &_primary_exp) {
     type = Type::PRIMARY;
@@ -27,7 +30,7 @@ public:
     op = _op;
     son_exp = std::move(_unary_exp);
   }
-
+  UnaryExpAST() {}
   void Dump() const override {
     std::cout << "UnaryExpAST { ";
     switch (type) {
@@ -37,6 +40,14 @@ public:
       case Type::OP:
         std::cout << op << ", " ;
         son_exp->Dump();
+        break;
+      case Type::IDENT:
+        std::cout << ident;
+        if (option == Option::F1) {
+          std::cout << "(";
+          func_r_params->Dump();
+          std::cout << ")";
+        }
         break;
       default:
         break;
