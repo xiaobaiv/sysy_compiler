@@ -39,7 +39,7 @@ stack<List> global_stack;
 
 // lexer 返回的所有 token 种类的声明
 // 注意 IDENT 和 INT_CONST 会返回 token 的值, 分别对应 str_val 和 int_val
-%token INT VOID RETURN CONST IF ELSE WHILE BREAK CONTINUE INT1
+%token INT VOID RETURN CONST IF ELSE WHILE BREAK CONTINUE
 %token <str_val> IDENT UNARYOP ADDOP MULOP RELOP EQOP LOROP LANDOP
 %token <int_val> INT_CONST
 
@@ -48,8 +48,10 @@ stack<List> global_stack;
 %type <ast_val> Exp UnaryExp PrimaryExp MulExp AddExp RelExp EqExp LAndExp LOrExp LVal ConstExp ExpList
 %type <ast_val> Decl ConstDecl BType ConstDef ConstDefList ConstInitVal
 %type <ast_val> VarDecl VarDef VarDefList InitVal
-%type <ast_val> CompUnit OtherCompUnit
+%type <ast_val> CompUnit
 %type <int_val> Number
+
+%glr-parser
 
 %%
 /* 正确，但是有些冗余，多使用了一个other_comp_unit  
