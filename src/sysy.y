@@ -10,6 +10,7 @@
 #include <memory>
 #include <string>
 #include <stack>
+#include <string.h>
 #include "/root/compiler/sysy-make-template/ast/ast.hh"
 // 声明 lexer 函数和错误处理函数
 int yylex();
@@ -38,7 +39,7 @@ stack<List> global_stack;
 
 // lexer 返回的所有 token 种类的声明
 // 注意 IDENT 和 INT_CONST 会返回 token 的值, 分别对应 str_val 和 int_val
-%token INT VOID RETURN CONST IF ELSE WHILE BREAK CONTINUE
+%token INT VOID RETURN CONST IF ELSE WHILE BREAK CONTINUE INT1
 %token <str_val> IDENT UNARYOP ADDOP MULOP RELOP EQOP LOROP LANDOP
 %token <int_val> INT_CONST
 
@@ -112,7 +113,7 @@ OtherCompUnit
     auto comp_unit = make_unique<CompUnitAST>();
     comp_unit->type = CompUnitAST::Type::FUNCDEF;
     comp_unit->option = CompUnitAST::Option::C0;
-    comp_unit->func_def_or_decl = unique_ptr<BaseAST>($2);
+    comp_unit->func_def_or_decl = unique_ptr<BaseAST>($1);
     ast = move(comp_unit);
   }
   | CompUnit FuncDef {
@@ -123,19 +124,19 @@ OtherCompUnit
     comp_unit->other_comp_unit = move(ast);
     ast = move(comp_unit);
   }
-  | Decl {
-    auto comp_unit = make_unique<CompUnitAST>();
-    comp_unit->type = CompUnitAST::Type::DECL;
-    comp_unit->option = CompUnitAST::Option::C0;
-    comp_unit->func_def_or_decl = unique_ptr<BaseAST>($1);
-    ast = move(comp_unit);
-  }
   | CompUnit Decl {
     auto comp_unit = make_unique<CompUnitAST>();
     comp_unit->type = CompUnitAST::Type::DECL;
     comp_unit->option = CompUnitAST::Option::C1;
     comp_unit->func_def_or_decl = unique_ptr<BaseAST>($2);
     comp_unit->other_comp_unit = move(ast);
+    ast = move(comp_unit);
+  }
+  | Decl {
+    auto comp_unit = make_unique<CompUnitAST>();
+    comp_unit->type = CompUnitAST::Type::DECL;
+    comp_unit->option = CompUnitAST::Option::C0;
+    comp_unit->func_def_or_decl = unique_ptr<BaseAST>($1);
     ast = move(comp_unit);
   }
   ;  
@@ -226,6 +227,12 @@ ExpList
   }
   ;
 // 同上, 不再解释
+BType
+  : INT {
+    $$ = new BTypeAST("int");
+  }
+  ;
+
 FuncType
   : INT {
     auto ast = new FuncTypeAST();
@@ -519,8 +526,8 @@ VarDecl
   : BType {
     global_stack.push(List());
   } VarDefList ';' {
-    auto btype = unique_ptr<BaseAST>($1);
-    $$ = new VarDeclAST(global_stack.top(), btype);
+     auto btype = unique_ptr<BaseAST>($1);
+     $$ = new VarDeclAST(global_stack.top(), btype);
     global_stack.pop();
   }
   ;
@@ -555,11 +562,7 @@ ConstDefList
     global_stack.top().emplace_back(ListType::CONSTDEF, std::move(const_def));
   }
 
-BType
-  : INT {
-    $$ = new BTypeAST("int");
-  }
-  ;
+
 
 ConstDef
   : IDENT '=' ConstInitVal {
@@ -611,6 +614,21 @@ ConstExp
 
 // 定义错误处理函数, 其中第二个参数是错误信息
 // parser 如果发生错误 (例如输入的程序出现了语法错误), 就会调用这个函数
-void yyerror(unique_ptr<BaseAST> &ast, const char *s) {
+/* void yyerror(unique_ptr<BaseAST> &ast, const char *s) {
   cerr << "error: " << s << endl;
+} */
+
+void yyerror(std::unique_ptr<BaseAST> &ast, const char *s) {
+  
+    extern int yylineno;    // defined and maintained in lex
+    extern char *yytext;    // defined and maintained in lex
+    int len=strlen(yytext);
+    int i;
+    char buf[512]={0};
+    for (i=0;i<len;++i)
+    {
+        sprintf(buf,"%s%d ",buf,yytext[i]);
+    }
+    fprintf(stderr, "ERROR: %s at symbol '%s' on line %d\n", s, buf, yylineno);
+
 }
