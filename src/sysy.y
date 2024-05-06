@@ -77,19 +77,64 @@ OtherCompUnit
     cout << "debug, CompUnit" << endl;
   }
   ;  */
+/* class CompUnitAST : public BaseAST {
+ public:
+  // 用智能指针管理对象
+  enum class Type { FUNCDEF, DECL } type;
+  enum class Option { C0, C1 } option;
+  std::unique_ptr<BaseAST> other_comp_unit;
+  std::unique_ptr<BaseAST> func_def_or_decl;
 
+  void Dump() const override {
+    std::cout << "CompUnitAST { ";
+    switch (type) {
+      case Type::FUNCDEF:
+        if(option == Option::C1) {
+          other_comp_unit->Dump();
+          std::cout << ", ";
+        }
+        func_def_or_decl->Dump();
+        break;
+      case Type::DECL:
+        if(option == Option::C1) {
+          other_comp_unit->Dump();
+          std::cout << ", ";
+        }
+        func_def_or_decl->Dump();
+        break;
+    }
+    std::cout << " }";
+  }
+}; */
 // 优化后的 CompUnit, 使用ast作为暂时存储右侧的CompUnit的缓存
   CompUnit
   : FuncDef {
     auto comp_unit = make_unique<CompUnitAST>();
-    comp_unit->func_def = unique_ptr<BaseAST>($1);
     comp_unit->type = CompUnitAST::Type::FUNCDEF;
+    comp_unit->option = CompUnitAST::Option::C0;
+    comp_unit->func_def_or_decl = unique_ptr<BaseAST>($2);
     ast = move(comp_unit);
   }
   | CompUnit FuncDef {
     auto comp_unit = make_unique<CompUnitAST>();
-    comp_unit->type = CompUnitAST::Type::COMPUNIT;
-    comp_unit->func_def = unique_ptr<BaseAST>($2);
+    comp_unit->type = CompUnitAST::Type::FUNCDEF;
+    comp_unit->option = CompUnitAST::Option::C1;
+    comp_unit->func_def_or_decl = unique_ptr<BaseAST>($2);
+    comp_unit->other_comp_unit = move(ast);
+    ast = move(comp_unit);
+  }
+  | Decl {
+    auto comp_unit = make_unique<CompUnitAST>();
+    comp_unit->type = CompUnitAST::Type::DECL;
+    comp_unit->option = CompUnitAST::Option::C0;
+    comp_unit->func_def_or_decl = unique_ptr<BaseAST>($1);
+    ast = move(comp_unit);
+  }
+  | CompUnit Decl {
+    auto comp_unit = make_unique<CompUnitAST>();
+    comp_unit->type = CompUnitAST::Type::DECL;
+    comp_unit->option = CompUnitAST::Option::C1;
+    comp_unit->func_def_or_decl = unique_ptr<BaseAST>($2);
     comp_unit->other_comp_unit = move(ast);
     ast = move(comp_unit);
   }

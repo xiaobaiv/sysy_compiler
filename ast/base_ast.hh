@@ -17,21 +17,27 @@ class BaseAST {
 class CompUnitAST : public BaseAST {
  public:
   // 用智能指针管理对象
-  enum class Type { FUNCDEF, COMPUNIT } type;
+  enum class Type { FUNCDEF, DECL } type;
+  enum class Option { C0, C1 } option;
   std::unique_ptr<BaseAST> other_comp_unit;
-  std::unique_ptr<BaseAST> func_def;
+  std::unique_ptr<BaseAST> func_def_or_decl;
+
   void Dump() const override {
     std::cout << "CompUnitAST { ";
     switch (type) {
       case Type::FUNCDEF:
-        func_def->Dump();
+        if(option == Option::C1) {
+          other_comp_unit->Dump();
+          std::cout << ", ";
+        }
+        func_def_or_decl->Dump();
         break;
-      case Type::COMPUNIT:
-        other_comp_unit->Dump();
-        std::cout << ", ";
-        func_def->Dump();
-        break;
-      default:
+      case Type::DECL:
+        if(option == Option::C1) {
+          other_comp_unit->Dump();
+          std::cout << ", ";
+        }
+        func_def_or_decl->Dump();
         break;
     }
     std::cout << " }";
