@@ -76,12 +76,31 @@ ConstExp      ::= Exp;
 
 class LValAST : public BaseAST {
 public:
-  std::string ident;
 
-  LValAST(std::string &_ident) : ident(_ident) {}
+  enum class Option { EXP0, EXP1 } option;
+
+  std::string ident;
+  std::unique_ptr<BaseAST> exp;
+
+  LValAST(std::string &_ident) : ident(_ident) {
+    option = Option::EXP0;
+  }
+
+  LValAST(std::string &_ident, std::unique_ptr<BaseAST> &_exp) : ident(_ident) {
+    option = Option::EXP1;
+    exp = std::move(_exp);
+  }
 
   void Dump() const override {
-    std::cout << "LValAST { " << ident << " }";
+    std::cout << "LValAST { ";
+    if (option == Option::EXP0) {
+      std::cout << ident;
+    } else {
+      std::cout << ident << "[";
+      exp->Dump();
+      std::cout << "]";
+    }
+    std::cout << " }";
   }
 
 };

@@ -46,7 +46,7 @@ stack<List> global_stack;
 // 非终结符的类型定义
 %type <ast_val> FuncDef FuncType Block Stmt BlockItem BlockItemList FuncFParams FuncFParam FuncRPParams
 %type <ast_val> Exp UnaryExp PrimaryExp MulExp AddExp RelExp EqExp LAndExp LOrExp LVal ConstExp ExpList
-%type <ast_val> Decl ConstDecl BType ConstDef ConstDefList ConstInitVal
+%type <ast_val> Decl ConstDecl BType ConstDef ConstDefList ConstInitVal ConstExpList 
 %type <ast_val> VarDecl VarDef VarDefList InitVal
 %type <ast_val> CompUnit
 %type <int_val> Number
@@ -572,6 +572,12 @@ ConstDef
     auto const_init_val = unique_ptr<BaseAST>($3);
     $$ = new ConstDefAST(ident, const_init_val);
   }
+  | IDENT '[' ConstExp ']' '=' ConstInitVal {
+    auto ident = *unique_ptr<string>($1);
+    auto const_exp = unique_ptr<BaseAST>($3);
+    auto const_init_val = unique_ptr<BaseAST>($6);
+    $$ = new ConstDefAST(ident, const_init_val, const_exp);
+  }
   ;
 
 VarDef
@@ -582,7 +588,18 @@ VarDef
   | IDENT '=' InitVal {
     auto ident = *unique_ptr<string>($1);
     auto init_val = unique_ptr<BaseAST>($3);
-    $$ = new VarDefAST(ident, init_val);
+    $$ = new VarDefAST(ident, init_val, VarDefAST::Option::C0);
+  }
+  | IDENT '[' ConstExp ']' {
+    auto ident = *unique_ptr<string>($1);
+    auto const_exp = unique_ptr<BaseAST>($3);
+    $$ = new VarDefAST(ident, const_exp);
+  }
+  | IDENT '[' ConstExp ']' '=' InitVal {
+    auto ident = *unique_ptr<string>($1);
+    auto const_exp = unique_ptr<BaseAST>($3);
+    auto init_val = unique_ptr<BaseAST>($6);
+    $$ = new VarDefAST(ident, init_val, const_exp);
   }
   ;
 
@@ -591,6 +608,15 @@ InitVal
     auto exp = unique_ptr<BaseAST>($1);
     $$ = new InitValAST(exp);
   }
+  | '{' '}' {
+    $$ = new InitValAST();
+  }
+  | '{' {
+    global_stack.push(List());
+  } ExpList '}' {
+    $$ = new InitValAST(global_stack.top());
+    global_stack.pop();
+  }
   ;
 
 ConstInitVal
@@ -598,11 +624,35 @@ ConstInitVal
     auto const_exp = unique_ptr<BaseAST>($1);
     $$ = new ConstInitValAST(const_exp);
   }
+  | '{' '}' {
+    $$ = new ConstInitValAST();
+  }
+  | '{' {
+    global_stack.push(List());
+  } ConstExpList '}' {
+    $$ = new ConstInitValAST(global_stack.top());
+    global_stack.pop();
+  }
   ;
+
+ConstExpList
+  : ConstExpList ',' ConstExp {
+    auto const_exp = unique_ptr<BaseAST>($3);
+    global_stack.top().emplace_back(ListType::CONSTEXP, std::move(const_exp));
+  }
+  | ConstExp {
+    auto const_exp = unique_ptr<BaseAST>($1);
+    global_stack.top().emplace_back(ListType::CONSTEXP, std::move(const_exp));
+  }
 
 LVal
   : IDENT {
     $$ = new LValAST(*unique_ptr<string>($1));
+  }
+  | IDENT '[' Exp ']' {
+    auto ident = *unique_ptr<string>($1);
+    auto exp = unique_ptr<BaseAST>($3);
+    $$ = new LValAST(ident, exp);
   }
   ;
 

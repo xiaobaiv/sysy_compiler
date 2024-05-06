@@ -102,12 +102,29 @@ public:
 
 class ConstDefAST : public BaseAST {
 public:
+    enum class Option { C0, C1 } option;
     std::string ident;
     std::unique_ptr<BaseAST> const_init_val;
-    ConstDefAST(const std::string &_ident, std::unique_ptr<BaseAST> &_const_init_val) : ident(_ident), const_init_val(std::move(_const_init_val)) {}
+    std::unique_ptr<BaseAST> const_exp;
+    // 构造函数，option为C0, 无const_exp
+    ConstDefAST(const std::string &_ident, std::unique_ptr<BaseAST> &_const_init_val) : ident(_ident), const_init_val(std::move(_const_init_val)) {
+        option = Option::C0;
+    }
+    // 构造函数，option为C1, 有const_exp
+    ConstDefAST(const std::string &_ident, std::unique_ptr<BaseAST> &_const_init_val, std::unique_ptr<BaseAST> &_const_exp) : ident(_ident), const_init_val(std::move(_const_init_val)), const_exp(std::move(_const_exp)) {
+        option = Option::C1;
+    }
+    
     void Dump() const override {
-        std::cout << "ConstDefAST { " << ident << " = ";
+        std::cout << "ConstDefAST { " << ident ;
+        if(option == Option::C1) {
+            std::cout << ", [";
+            const_exp->Dump();
+            std::cout << "]";
+        }
+        std::cout << " = ";
         const_init_val->Dump();
+        
         std::cout << " }";
     }
 };
@@ -115,16 +132,30 @@ public:
 class VarDefAST : public BaseAST {
 public:
   enum class Type { IDENT, IDENT_ASSIGN_INITVAL } type;
+  enum class Option { C0, C1 } option;
   std::string ident;
   std::unique_ptr<BaseAST> init_val;
-  VarDefAST(const std::string &_ident, std::unique_ptr<BaseAST> &_init_val) {
-    ident = _ident;
-    init_val = std::move(_init_val);
+  std::unique_ptr<BaseAST> const_exp;
+  
+ // VarDefAST构造函数，IDENT_ASSIGN_INITVAL, C0
+  VarDefAST(const std::string &_ident, std::unique_ptr<BaseAST> &_init_val, Option _option) : ident(_ident), init_val(std::move(_init_val)) {
     type = Type::IDENT_ASSIGN_INITVAL;
+    option = Option::C0;
   }
-  VarDefAST(const std::string &_ident) {
-    ident = _ident;
+  // VarDefAST构造函数，IDENT_ASSIGN_INITVAL, C1
+  VarDefAST(const std::string &_ident, std::unique_ptr<BaseAST> &_init_val, std::unique_ptr<BaseAST> &_const_exp) : ident(_ident), init_val(std::move(_init_val)), const_exp(std::move(_const_exp)) {
+    type = Type::IDENT_ASSIGN_INITVAL;
+    option = Option::C1;
+  }
+  // VarDefAST构造函数，IDENT, C0
+  VarDefAST(const std::string &_ident) : ident(_ident) {
     type = Type::IDENT;
+    option = Option::C0;
+  }
+  // VarDefAST构造函数，IDENT, C1
+  VarDefAST(const std::string &_ident, std::unique_ptr<BaseAST> &_const_exp) : ident(_ident), const_exp(std::move(_const_exp)) {
+    type = Type::IDENT;
+    option = Option::C1;
   }
 
   void Dump() const override {
@@ -132,9 +163,19 @@ public:
     switch (type) {
       case Type::IDENT:
         std::cout << ident;
+        if(option == Option::C1) {
+          std::cout << "[";
+          const_exp->Dump();
+          std::cout << "]";
+        }
         break;
       case Type::IDENT_ASSIGN_INITVAL:
-        std::cout << ident << ", ";
+        std::cout << ident;
+        if(option == Option::C1) {
+          std::cout << "[";
+          const_exp->Dump();
+          std::cout << "]";
+        }
         init_val->Dump();
         break;
     }
@@ -143,11 +184,33 @@ public:
 };
 class ConstInitValAST : public BaseAST {
 public:
+    enum class Type { CONSTEXP, ARRAY } type;
+    enum class Option { C0, C1 } option;
     std::unique_ptr<BaseAST> const_exp;
-    ConstInitValAST(std::unique_ptr<BaseAST> &_const_exp) : const_exp(std::move(_const_exp)) {}
+    List const_exp_list;
+    ConstInitValAST() {}
+    ConstInitValAST(std::unique_ptr<BaseAST> &_const_exp) : const_exp(std::move(_const_exp)) { type = Type::CONSTEXP; }
+    ConstInitValAST(List &_const_exp_list) {
+        for(auto &item : _const_exp_list) {
+            const_exp_list.push_back(std::make_pair(item.first, std::move(item.second)));
+        }
+        type = Type::ARRAY;
+    }
+    
     void Dump() const override {
         std::cout << "ConstInitValAST { ";
-        const_exp->Dump();
+        switch (type) {
+            case Type::CONSTEXP:
+                const_exp->Dump();
+                break;
+            case Type::ARRAY:
+                for(auto &item : const_exp_list) {
+                    item.second->Dump();
+                }
+                break;
+            default:
+                break;
+        }
         std::cout << " }";
     }
 
@@ -155,14 +218,33 @@ public:
 
 class InitValAST : public BaseAST {
 public:
+    enum class Type { EXP, ARRAY } type;
     std::unique_ptr<BaseAST> exp;
-    InitValAST(std::unique_ptr<BaseAST> &_exp) : exp(std::move(_exp)) {}
-    void Dump() const override {
-        std::cout << "InitValAST { ";
-        exp->Dump();
-        std::cout << " }";
-    }
+    List exp_list;
 
+    InitValAST() {}
+    InitValAST(std::unique_ptr<BaseAST> &_exp) : exp(std::move(_exp)) { type = Type::EXP; }
+    InitValAST(List &_exp_list) { 
+        for(auto &item : _exp_list) {
+            exp_list.push_back(std::make_pair(item.first, std::move(item.second)));
+        }
+        type = Type::ARRAY;
+    }
+    
+  void Dump() const override {
+    std::cout << "InitValAST { ";
+    switch (type) {
+      case Type::EXP:
+        exp->Dump();
+        break;
+      case Type::ARRAY:
+        for(auto &item : exp_list) {
+          item.second->Dump();
+        }
+        break;
+    }
+    std::cout << " }";
+  }
 };
 
 class ConstExpAST : public BaseAST {
