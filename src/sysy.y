@@ -130,8 +130,17 @@ FuncFParam
   : BType IDENT {
     auto btype = unique_ptr<BaseAST>($1);
     auto ident = *unique_ptr<string>($2);
-    $$ = new FuncFParamAST(ident, btype);
+    auto const_exp_list = List();
+    $$ = new FuncFParamAST(FuncFParamAST::Option::C0, ident, const_exp_list, btype);
   }
+  | BType IDENT '[' ']' {
+    global_stack.push(List());
+  } ConstExpList {
+    auto btype = unique_ptr<BaseAST>($1);
+    auto ident = *unique_ptr<string>($2);
+    $$ = new FuncFParamAST(FuncFParamAST::Option::C1, ident, global_stack.top(), btype);
+    global_stack.pop();
+  } 
   ;
 
 FuncRPParams
@@ -339,7 +348,6 @@ UnaryExp
     ast->ident = *unique_ptr<string>($1);
     ast->func_r_params = unique_ptr<BaseAST>($3);
     $$ = ast;
-    cout << "debug" << endl;
   }
   ;
 

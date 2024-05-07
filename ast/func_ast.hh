@@ -523,12 +523,22 @@ public:
 
 class FuncFParamAST : public BaseAST {
 public:
+  enum class Option { C0, C1 } option;
   std::string ident;
+  List const_exp_list;
   std::unique_ptr<BaseAST> btype;
-  FuncFParamAST(const std::string &_ident, std::unique_ptr<BaseAST> &_btype) : ident(_ident), btype(std::move(_btype)) {}
+  FuncFParamAST(Option _option , const std::string &_ident, List &_const_exp_list, std::unique_ptr<BaseAST> &_btype) : option(_option), ident(_ident), btype(std::move(_btype)) {
+    for(auto &item : _const_exp_list) {
+      const_exp_list.push_back(std::make_pair(item.first, std::move(item.second)));
+    }
+  }
   void Dump() const override {
-    std::cout << "FuncFParamAST { " << ident << ", ";
-    btype->Dump();
+    std::cout << "FuncFParamAST { " << ident;
+    for(auto &item : const_exp_list) {
+      std::cout << "[" ;
+      item.second->Dump();
+      std::cout << "]";
+    }
     std::cout << " }";
   }
 };
