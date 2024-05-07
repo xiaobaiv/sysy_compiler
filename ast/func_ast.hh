@@ -1,28 +1,82 @@
 #include "base_ast.hh"
 
-/* class OtherCompUnitAST : public BaseAST {
+// CompUnit 是 BaseAST
+class CompUnitAST : public BaseAST {
  public:
-  enum class Option { COMPUNIT0, COMPUNIT1 } option;
+  // 用智能指针管理对象
+  enum class Type { FUNCDEF, DECL } type;
+  enum class Option { C0, C1 } option;
   std::unique_ptr<BaseAST> other_comp_unit;
-  std::unique_ptr<BaseAST> func_def;
-  OtherCompUnitAST() {}
+  std::unique_ptr<BaseAST> func_def_or_decl;
+
   void Dump() const override {
-    std::cout << "OtherCompUnitAST { ";
-    switch (option) {
-      case Option::COMPUNIT0:
-        func_def->Dump();
+    std::cout << "CompUnitAST { ";
+    switch (type) {
+      case Type::FUNCDEF:
+        if(option == Option::C1) {
+          other_comp_unit->Dump();
+          std::cout << ", ";
+        }
+        func_def_or_decl->Dump();
         break;
-      case Option::COMPUNIT1:
-        other_comp_unit->Dump();
-        std::cout << ", ";
-        func_def->Dump();
+      case Type::DECL:
+        if(option == Option::C1) {
+          other_comp_unit->Dump();
+          std::cout << ", ";
+        }
+        func_def_or_decl->Dump();
         break;
     }
     std::cout << " }";
   }
-}; */
 
-class DeclAST : public BaseAST {
+ /*  void toDot(std::string& dot) const override {
+    std::string node_id = getUniqueID();
+    if(type == Type::FUNCDEF) {
+      if(option == Option::C0) { // CompUnit      ::=  FuncDef;
+        std::string node_def = node_id + "[label=\"<f0> FuncDef\"];\n";
+        dot += node_def;
+        func_def_or_decl->toDot(dot);
+        dot += "\"" + node_id + "\":f0 ->" + "\"" + func_def_or_decl->getUniqueID() + "\";\n";
+      } else if (option == Option::C1) { // CompUnit      ::=  CompUnit FuncDef; 按照顺序展开
+        std::string node_def = node_id + "[label=\"<f0> CompUnit | <f1> FuncDef\"];\n";
+        dot += node_def;
+
+        other_comp_unit->toDot(dot);
+        dot += "\"" + node_id + "\":f0 ->" + "\"" + other_comp_unit->getUniqueID() + "\";\n";
+
+        func_def_or_decl->toDot(dot);
+        dot += "\"" + node_id + "\":f1 ->" + "\"" + func_def_or_decl->getUniqueID() + "\";\n";
+      } else {
+        std::cerr << "CompUnitAST::toDot: unknown option" << std::endl;
+      }
+    } else if(type == Type::DECL) {
+      if(option == Option::C0) { // CompUnit      ::=  Decl;
+        std::string node_def = node_id + "[label=\"<f0> Decl\"];\n";
+        dot += node_def;
+        func_def_or_decl->toDot(dot);
+        dot += "\"" + node_id + "\":f0 ->" + "\"" + func_def_or_decl->getUniqueID() + "\";\n";
+      } else if (option == Option::C1) { // CompUnit      ::=  CompUnit Decl; 按照顺序展开
+        std::string node_def = node_id + "[label=\"<f0> CompUnit | <f1> Decl\"];\n";
+        dot += node_def;
+
+        other_comp_unit->toDot(dot);
+        dot += "\"" + node_id + "\":f0 ->" + "\"" + other_comp_unit->getUniqueID() + "\";\n";
+
+        func_def_or_decl->toDot(dot);
+        dot += "\"" + node_id + "\":f1 ->" + "\"" + func_def_or_decl->getUniqueID() + "\";\n";
+      } else {
+        std::cerr << "CompUnitAST::toDot: unknown option" << std::endl;
+      }
+    } else {
+      std::cerr << "CompUnitAST::toDot: unknown type" << std::endl;
+    }
+  } */
+    
+
+}; 
+
+class DeclAST : public BaseAST { // Decl          ::= ConstDecl | VarDecl;
  public:
 
     std::unique_ptr<BaseAST> const_or_var_decl;
@@ -42,6 +96,23 @@ class DeclAST : public BaseAST {
         }
         std::cout << " }";
     }
+
+    /* void toDot(std::string& dot) const override {
+        std::string node_id = getUniqueID();
+        if(type == Type::CONST) { // Decl          ::= ConstDecl;
+            std::string node_def = node_id + "[label=\"<f0> ConstDecl\"];\n";
+            dot += node_def;
+            const_or_var_decl->toDot(dot);
+            dot += "\"" + node_id + "\":f0 ->" + "\"" + const_or_var_decl->getUniqueID() + "\";\n";
+        } else if(type == Type::VAR) { // Decl          ::= VarDecl;
+            std::string node_def = node_id + "[label=\"<f0> VarDecl\"];\n";
+            dot += node_def;
+            const_or_var_decl->toDot(dot);
+            dot += "\"" + node_id + "\":f0 ->" + "\"" + const_or_var_decl->getUniqueID() + "\";\n";
+        } else {
+            std::cerr << "DeclAST::toDot: unknown type" << std::endl;
+        }
+    } */
 
 };
 
@@ -68,7 +139,7 @@ public:
   }
 };
 
-class VarDeclAST : public BaseAST {
+class VarDeclAST : public BaseAST { // VarDecl       ::= BType VarDef {"," VarDef} ";";
 public:
   List var_def_list;
   std::unique_ptr<BaseAST> btype;
@@ -88,9 +159,29 @@ public:
     }
     std::cout << " }";
   }
+
+  /* void toDot(std::string& dot) const override { // VarDecl       ::= BType VarDef {"," VarDef} ";";
+    std::string node_id = getUniqueID();
+    std::string node_def = node_id + "[label=\"<f0> BType | <f1> VarDef";
+    for(int i = 0; i < var_def_list.size(); i++) {
+      node_def += " | <f" + std::to_string(i + 2) + "> VarDef";
+    }
+    node_def += "\"];\n";
+    dot += node_def;
+
+    btype->toDot(dot);
+    dot += "\"" + node_id + "\":f0 ->" + "\"" + btype->getUniqueID() + "\";\n";
+
+    for(int i = 0; i < var_def_list.size(); i++) {
+      var_def_list[i].second->toDot(dot);
+      dot += "\"" + node_id + "\":f" + std::to_string(i + 1) + " ->" + "\"" + var_def_list[i].second->getUniqueID() + "\";\n";
+    }
+    
+  } */
+
 };
 
-class BTypeAST : public BaseAST {
+class BTypeAST : public BaseAST { // BType         ::= "int";
 public:
     std::string btype;
     BTypeAST(const std::string &_btype) : btype(_btype) {}
@@ -98,105 +189,95 @@ public:
         std::cout << "BType { " << btype << " }";
     }
 
+    /* void toDot(std::string& dot) const override {
+      // 生成当前节点的唯一标识符
+      std::string node_id = getUniqueID();
+      std::string node_label = "BType: " + btype;  // 直接将类型名称加入标签
+      std::string node_def = node_id + " [label=\"" + node_label + "\"];\n";
+      dot += node_def;
+    } */
+
+
 };
 
 class ConstDefAST : public BaseAST {
 public:
-    enum class Option { C0, C1 } option;
     std::string ident;
     std::unique_ptr<BaseAST> const_init_val;
-    std::unique_ptr<BaseAST> const_exp;
-    // 构造函数，option为C0, 无const_exp
-    ConstDefAST(const std::string &_ident, std::unique_ptr<BaseAST> &_const_init_val) : ident(_ident), const_init_val(std::move(_const_init_val)) {
-        option = Option::C0;
-    }
-    // 构造函数，option为C1, 有const_exp
-    ConstDefAST(const std::string &_ident, std::unique_ptr<BaseAST> &_const_init_val, std::unique_ptr<BaseAST> &_const_exp) : ident(_ident), const_init_val(std::move(_const_init_val)), const_exp(std::move(_const_exp)) {
-        option = Option::C1;
-    }
+    List const_exp_list;
     
+    // ConstDefAST构造函数，ConstDef      ::= IDENT {"[" ConstExp "]"} "=" ConstInitVal;, 使用const_exp_list
+    ConstDefAST(const std::string &_ident, List &_const_exp_list, std::unique_ptr<BaseAST> &_const_init_val) : ident(_ident), const_init_val(std::move(_const_init_val)) {
+        for(auto &item : _const_exp_list) {
+            const_exp_list.push_back(std::make_pair(item.first, std::move(item.second)));
+        }
+    }
+
     void Dump() const override {
-        std::cout << "ConstDefAST { " << ident ;
-        if(option == Option::C1) {
-            std::cout << ", [";
-            const_exp->Dump();
+        std::cout << "ConstDefAST { " << ident;
+        for(auto &item : const_exp_list) {
+            std::cout << "[" ;
+            item.second->Dump();
             std::cout << "]";
         }
         std::cout << " = ";
         const_init_val->Dump();
-        
         std::cout << " }";
     }
+    
 };
 
-class VarDefAST : public BaseAST {
+class VarDefAST : public BaseAST { // VarDef        ::= IDENT {"[" ConstExp "]"} | IDENT {"[" ConstExp "]"} "=" InitVal;
 public:
-  enum class Type { IDENT, IDENT_ASSIGN_INITVAL } type;
-  enum class Option { C0, C1 } option;
+  enum class Type { IDENT, INIT} type;
   std::string ident;
+  List const_exp_list;
   std::unique_ptr<BaseAST> init_val;
-  std::unique_ptr<BaseAST> const_exp;
-  
- // VarDefAST构造函数，IDENT_ASSIGN_INITVAL, C0
-  VarDefAST(const std::string &_ident, std::unique_ptr<BaseAST> &_init_val, Option _option) : ident(_ident), init_val(std::move(_init_val)) {
-    type = Type::IDENT_ASSIGN_INITVAL;
-    option = Option::C0;
-  }
-  // VarDefAST构造函数，IDENT_ASSIGN_INITVAL, C1
-  VarDefAST(const std::string &_ident, std::unique_ptr<BaseAST> &_init_val, std::unique_ptr<BaseAST> &_const_exp) : ident(_ident), init_val(std::move(_init_val)), const_exp(std::move(_const_exp)) {
-    type = Type::IDENT_ASSIGN_INITVAL;
-    option = Option::C1;
-  }
-  // VarDefAST构造函数，IDENT, C0
-  VarDefAST(const std::string &_ident) : ident(_ident) {
+
+  VarDefAST(const std::string &_ident, List &_const_exp_list) : ident(_ident) {
+    for(auto &item : _const_exp_list) {
+      const_exp_list.push_back(std::make_pair(item.first, std::move(item.second)));
+    }
     type = Type::IDENT;
-    option = Option::C0;
   }
-  // VarDefAST构造函数，IDENT, C1
-  VarDefAST(const std::string &_ident, std::unique_ptr<BaseAST> &_const_exp) : ident(_ident), const_exp(std::move(_const_exp)) {
-    type = Type::IDENT;
-    option = Option::C1;
+  VarDefAST(const std::string &_ident, List &_const_exp_list, std::unique_ptr<BaseAST> &_init_val) : ident(_ident), init_val(std::move(_init_val)) {
+    for(auto &item : _const_exp_list) {
+      const_exp_list.push_back(std::make_pair(item.first, std::move(item.second)));
+    }
+    type = Type::INIT;
   }
 
   void Dump() const override {
-    std::cout << "VarDefAST { ";
-    switch (type) {
-      case Type::IDENT:
-        std::cout << ident;
-        if(option == Option::C1) {
-          std::cout << "[";
-          const_exp->Dump();
-          std::cout << "]";
-        }
-        break;
-      case Type::IDENT_ASSIGN_INITVAL:
-        std::cout << ident;
-        if(option == Option::C1) {
-          std::cout << "[";
-          const_exp->Dump();
-          std::cout << "]";
-        }
-        init_val->Dump();
-        break;
+    std::cout << "VarDefAST { " << ident;
+    if(const_exp_list.size() > 0) {
+      for(auto &item : const_exp_list) {
+        std::cout << "[" ;
+        item.second->Dump();
+        std::cout << "]";
+      }
+    }
+    if(type == Type::INIT) {
+      std::cout << " = ";
+    init_val->Dump();
     }
     std::cout << " }";
   }
+
 };
-class ConstInitValAST : public BaseAST {
+class ConstInitValAST : public BaseAST { // ConstInitVal  ::= ConstExp | "{" [ConstInitVal {"," ConstInitVal}] "}";
 public:
     enum class Type { CONSTEXP, ARRAY } type;
-    enum class Option { C0, C1 } option;
     std::unique_ptr<BaseAST> const_exp;
-    List const_exp_list;
-    ConstInitValAST() {}
+    List const_init_val_list;
+
     ConstInitValAST(std::unique_ptr<BaseAST> &_const_exp) : const_exp(std::move(_const_exp)) { type = Type::CONSTEXP; }
-    ConstInitValAST(List &_const_exp_list) {
-        for(auto &item : _const_exp_list) {
-            const_exp_list.push_back(std::make_pair(item.first, std::move(item.second)));
+    ConstInitValAST(List &_const_init_val_list) {
+        for(auto &item : _const_init_val_list) {
+            const_init_val_list.push_back(std::make_pair(item.first, std::move(item.second)));
         }
         type = Type::ARRAY;
     }
-    
+
     void Dump() const override {
         std::cout << "ConstInitValAST { ";
         switch (type) {
@@ -204,7 +285,7 @@ public:
                 const_exp->Dump();
                 break;
             case Type::ARRAY:
-                for(auto &item : const_exp_list) {
+                for(auto &item : const_init_val_list) {
                     item.second->Dump();
                 }
                 break;
@@ -216,35 +297,37 @@ public:
 
 };
 
-class InitValAST : public BaseAST {
+class InitValAST : public BaseAST { // ConstInitVal  ::= ConstExp | "{" [ConstInitVal {"," ConstInitVal}] "}";
 public:
     enum class Type { EXP, ARRAY } type;
     std::unique_ptr<BaseAST> exp;
-    List exp_list;
+    List init_val_list;
 
-    InitValAST() {}
     InitValAST(std::unique_ptr<BaseAST> &_exp) : exp(std::move(_exp)) { type = Type::EXP; }
-    InitValAST(List &_exp_list) { 
-        for(auto &item : _exp_list) {
-            exp_list.push_back(std::make_pair(item.first, std::move(item.second)));
+    InitValAST(List &_init_val_list) {
+        for(auto &item : _init_val_list) {
+            init_val_list.push_back(std::make_pair(item.first, std::move(item.second)));
         }
         type = Type::ARRAY;
     }
-    
-  void Dump() const override {
-    std::cout << "InitValAST { ";
-    switch (type) {
-      case Type::EXP:
-        exp->Dump();
-        break;
-      case Type::ARRAY:
-        for(auto &item : exp_list) {
-          item.second->Dump();
+
+    void Dump() const override {
+        std::cout << "InitValAST { ";
+        switch (type) {
+            case Type::EXP:
+                exp->Dump();
+                break;
+            case Type::ARRAY:
+                for(auto &item : init_val_list) {
+                    item.second->Dump();
+                }
+                break;
+            default:
+                break;
         }
-        break;
+        std::cout << " }";
     }
-    std::cout << " }";
-  }
+
 };
 
 class ConstExpAST : public BaseAST {

@@ -45,70 +45,16 @@ stack<List> global_stack;
 
 // 非终结符的类型定义
 %type <ast_val> FuncDef FuncType Block Stmt BlockItem BlockItemList FuncFParams FuncFParam FuncRPParams
-%type <ast_val> Exp UnaryExp PrimaryExp MulExp AddExp RelExp EqExp LAndExp LOrExp LVal ConstExp ExpList
-%type <ast_val> Decl ConstDecl BType ConstDef ConstDefList ConstInitVal ConstExpList 
-%type <ast_val> VarDecl VarDef VarDefList InitVal
+%type <ast_val> Exp UnaryExp PrimaryExp MulExp AddExp RelExp EqExp LAndExp LOrExp LVal ConstExp ExpList ArrayExpList
+%type <ast_val> Decl ConstDecl BType ConstDef ConstDefList ConstInitVal ConstExpList  ConstInitValList
+%type <ast_val> VarDecl VarDef VarDefList InitVal InitValList
 %type <ast_val> CompUnit
 %type <int_val> Number
 
 %glr-parser
 
 %%
-/* 正确，但是有些冗余，多使用了一个other_comp_unit  
-CompUnit
-  : OtherCompUnit {
-    auto comp_unit = make_unique<CompUnitAST>();
-    comp_unit->other_comp_unit = unique_ptr<BaseAST>($1);
-    ast = move(comp_unit);
-  }
-  ;
 
-OtherCompUnit
-  : FuncDef {
-    auto comp_unit = new OtherCompUnitAST();
-    comp_unit->func_def = unique_ptr<BaseAST>($1);
-    comp_unit->option = OtherCompUnitAST::Option::COMPUNIT0;
-    $$ = comp_unit;
-    cout << "debug, FucnDef" << endl;
-  }
-  | OtherCompUnit FuncDef {
-    auto comp_unit = new OtherCompUnitAST();
-    comp_unit->func_def = unique_ptr<BaseAST>($2);
-    comp_unit->other_comp_unit = unique_ptr<BaseAST>($1);
-    comp_unit->option = OtherCompUnitAST::Option::COMPUNIT1;
-    $$ = comp_unit;
-    cout << "debug, CompUnit" << endl;
-  }
-  ;  */
-/* class CompUnitAST : public BaseAST {
- public:
-  // 用智能指针管理对象
-  enum class Type { FUNCDEF, DECL } type;
-  enum class Option { C0, C1 } option;
-  std::unique_ptr<BaseAST> other_comp_unit;
-  std::unique_ptr<BaseAST> func_def_or_decl;
-
-  void Dump() const override {
-    std::cout << "CompUnitAST { ";
-    switch (type) {
-      case Type::FUNCDEF:
-        if(option == Option::C1) {
-          other_comp_unit->Dump();
-          std::cout << ", ";
-        }
-        func_def_or_decl->Dump();
-        break;
-      case Type::DECL:
-        if(option == Option::C1) {
-          other_comp_unit->Dump();
-          std::cout << ", ";
-        }
-        func_def_or_decl->Dump();
-        break;
-    }
-    std::cout << " }";
-  }
-}; */
 // 优化后的 CompUnit, 使用ast作为暂时存储右侧的CompUnit的缓存
   CompUnit
   : FuncDef {
@@ -142,26 +88,6 @@ OtherCompUnit
     ast = move(comp_unit);
   }
   ;  
-
-/* CompUnit 1. 设计unique_ptr 和 普通指针的转换，有问题。 2. 如果不设置 $$ ，会报错，因为调用$2
-  : FuncDef {
-    auto comp_unit = new CompUnitAST();
-    comp_unit->func_def = std::unique_ptr<BaseAST>($1);
-    comp_unit->type = CompUnitAST::Type::FUNCDEF;
-    ast = comp_unit;
-    cout << "debug, FucnDef" << endl;
-    $$ = ast;
-  }
-  | CompUnit FuncDef {
-    auto comp_unit = new CompUnitAST();
-    comp_unit->other_comp_unit = std::unique_ptr<BaseAST>($1);
-    comp_unit->func_def = std::unique_ptr<BaseAST>($2);
-    comp_unit->type = CompUnitAST::Type::COMPUNIT;
-    ast = comp_unit;
-    cout << "debug, CompUnit" << endl;
-    $$ = ast;
-  }
-  ; */
 
 FuncDef
   : FuncType IDENT '(' ')' Block {
@@ -567,55 +493,41 @@ ConstDefList
 
 
 ConstDef
-  : IDENT '=' ConstInitVal {
+  : IDENT {
+    global_stack.push(List());
+  } ConstExpList '=' ConstInitVal {
     auto ident = *unique_ptr<string>($1);
-    auto const_init_val = unique_ptr<BaseAST>($3);
-    $$ = new ConstDefAST(ident, const_init_val);
-  }
-  | IDENT '[' ConstExp ']' '=' ConstInitVal {
-    auto ident = *unique_ptr<string>($1);
-    auto const_exp = unique_ptr<BaseAST>($3);
-    auto const_init_val = unique_ptr<BaseAST>($6);
-    $$ = new ConstDefAST(ident, const_init_val, const_exp);
+    auto const_init_val = unique_ptr<BaseAST>($5);
+    $$ = new ConstDefAST(ident, global_stack.top(), const_init_val);
+    global_stack.pop();
   }
   ;
+
+  
 
 VarDef
   : IDENT {
+    global_stack.push(List());
+  } ConstExpList {
     auto ident = *unique_ptr<string>($1);
-    $$ = new VarDefAST(ident);
+    $$ = new VarDefAST(ident, global_stack.top());
+    global_stack.pop();
   }
-  | IDENT '=' InitVal {
+  | IDENT {
+    global_stack.push(List());
+  } ConstExpList '=' InitVal {
     auto ident = *unique_ptr<string>($1);
-    auto init_val = unique_ptr<BaseAST>($3);
-    $$ = new VarDefAST(ident, init_val, VarDefAST::Option::C0);
-  }
-  | IDENT '[' ConstExp ']' {
-    auto ident = *unique_ptr<string>($1);
-    auto const_exp = unique_ptr<BaseAST>($3);
-    $$ = new VarDefAST(ident, const_exp);
-  }
-  | IDENT '[' ConstExp ']' '=' InitVal {
-    auto ident = *unique_ptr<string>($1);
-    auto const_exp = unique_ptr<BaseAST>($3);
-    auto init_val = unique_ptr<BaseAST>($6);
-    $$ = new VarDefAST(ident, init_val, const_exp);
+    auto init_val = unique_ptr<BaseAST>($5);
+    $$ = new VarDefAST(ident, global_stack.top(), init_val);
+    global_stack.pop();
   }
   ;
 
-InitVal
-  : Exp {
-    auto exp = unique_ptr<BaseAST>($1);
-    $$ = new InitValAST(exp);
-  }
-  | '{' '}' {
-    $$ = new InitValAST();
-  }
-  | '{' {
-    global_stack.push(List());
-  } ExpList '}' {
-    $$ = new InitValAST(global_stack.top());
-    global_stack.pop();
+ConstExpList
+  : %empty
+  | ConstExpList '[' ConstExp ']' {
+    auto const_exp = unique_ptr<BaseAST>($3);
+    global_stack.top().emplace_back(ListType::CONSTEXP, std::move(const_exp));
   }
   ;
 
@@ -625,34 +537,70 @@ ConstInitVal
     $$ = new ConstInitValAST(const_exp);
   }
   | '{' '}' {
-    $$ = new ConstInitValAST();
+    auto const_init_val_list = List();
+    $$ = new ConstInitValAST(const_init_val_list);
   }
   | '{' {
     global_stack.push(List());
-  } ConstExpList '}' {
+  } ConstInitValList '}' {
     $$ = new ConstInitValAST(global_stack.top());
     global_stack.pop();
   }
   ;
 
-ConstExpList
-  : ConstExpList ',' ConstExp {
-    auto const_exp = unique_ptr<BaseAST>($3);
-    global_stack.top().emplace_back(ListType::CONSTEXP, std::move(const_exp));
+ConstInitValList
+  : ConstInitValList ',' ConstInitVal {
+    auto const_init_val = unique_ptr<BaseAST>($3);
+    global_stack.top().emplace_back(ListType::CONSTINITVAL, std::move(const_init_val));
   }
-  | ConstExp {
-    auto const_exp = unique_ptr<BaseAST>($1);
-    global_stack.top().emplace_back(ListType::CONSTEXP, std::move(const_exp));
+  | ConstInitVal {
+    auto const_init_val = unique_ptr<BaseAST>($1);
+    global_stack.top().emplace_back(ListType::CONSTINITVAL, std::move(const_init_val));
   }
+  ;
+
+InitVal
+  : Exp {
+    auto exp = unique_ptr<BaseAST>($1);
+    $$ = new InitValAST(exp);
+  }
+  | '{' '}' {
+    auto init_val_list = List();
+    $$ = new InitValAST(init_val_list);
+  }
+  | '{' {
+    global_stack.push(List());
+  } InitValList '}' {
+    $$ = new InitValAST(global_stack.top());
+    global_stack.pop();
+  }
+
+InitValList
+  : InitValList ',' InitVal {
+    auto init_val = unique_ptr<BaseAST>($3);
+    global_stack.top().emplace_back(ListType::INITVAL, std::move(init_val));
+  }
+  | InitVal {
+    auto init_val = unique_ptr<BaseAST>($1);
+    global_stack.top().emplace_back(ListType::INITVAL, std::move(init_val));
+  }
+  ;
 
 LVal
   : IDENT {
-    $$ = new LValAST(*unique_ptr<string>($1));
-  }
-  | IDENT '[' Exp ']' {
+    global_stack.push(List());
+  } ArrayExpList {
     auto ident = *unique_ptr<string>($1);
+    $$ = new LValAST(ident, global_stack.top());
+    global_stack.pop();
+  }
+  ;
+
+ArrayExpList
+  : %empty
+  | ArrayExpList '[' Exp ']' {
     auto exp = unique_ptr<BaseAST>($3);
-    $$ = new LValAST(ident, exp);
+    global_stack.top().emplace_back(ListType::EXP, std::move(exp));
   }
   ;
 

@@ -74,30 +74,28 @@ PrimaryExp    ::= "(" Exp ")" | LVal | Number;
 ConstExp      ::= Exp;
  */
 
+/* for(auto &item : _block_item_list) {
+      block_item_list.push_back(std::make_pair(item.first, std::move(item.second)));
+    } */
+
 class LValAST : public BaseAST {
 public:
 
-  enum class Option { EXP0, EXP1 } option;
-
   std::string ident;
-  std::unique_ptr<BaseAST> exp;
+  List exp_list;
 
-  LValAST(std::string &_ident) : ident(_ident) {
-    option = Option::EXP0;
-  }
-
-  LValAST(std::string &_ident, std::unique_ptr<BaseAST> &_exp) : ident(_ident) {
-    option = Option::EXP1;
-    exp = std::move(_exp);
+  LValAST(std::string &_ident, List &_exp_list) {
+    ident = _ident;
+    for (auto &exp : _exp_list) {
+      exp_list.push_back(std::make_pair(exp.first, std::move(exp.second)));
+    }
   }
 
   void Dump() const override {
-    std::cout << "LValAST { ";
-    if (option == Option::EXP0) {
-      std::cout << ident;
-    } else {
-      std::cout << ident << "[";
-      exp->Dump();
+    std::cout << "LValAST { " << ident;
+    for (auto &exp : exp_list) {
+      std::cout << "[";
+      exp.second->Dump();
       std::cout << "]";
     }
     std::cout << " }";
