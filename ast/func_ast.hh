@@ -30,7 +30,7 @@ class CompUnitAST : public BaseAST {
     std::cout << " }";
   }
 
- /*  void toDot(std::string& dot) const override {
+    void toDot(std::string& dot) override  {
     std::string node_id = getUniqueID();
     if(type == Type::FUNCDEF) {
       if(option == Option::C0) { // CompUnit      ::=  FuncDef;
@@ -71,7 +71,7 @@ class CompUnitAST : public BaseAST {
     } else {
       std::cerr << "CompUnitAST::toDot: unknown type" << std::endl;
     }
-  } */
+  }
     
 
 }; 
@@ -97,7 +97,7 @@ class DeclAST : public BaseAST { // Decl          ::= ConstDecl | VarDecl;
         std::cout << " }";
     }
 
-    /* void toDot(std::string& dot) const override {
+     void toDot(std::string& dot) override  {
         std::string node_id = getUniqueID();
         if(type == Type::CONST) { // Decl          ::= ConstDecl;
             std::string node_def = node_id + "[label=\"<f0> ConstDecl\"];\n";
@@ -112,12 +112,13 @@ class DeclAST : public BaseAST { // Decl          ::= ConstDecl | VarDecl;
         } else {
             std::cerr << "DeclAST::toDot: unknown type" << std::endl;
         }
-    } */
+    } 
 
 };
 
+
 // TODO: ConstDeclAST
-class ConstDeclAST : public BaseAST {
+class ConstDeclAST : public BaseAST { // ConstDecl     ::= "const" BType ConstDef {"," ConstDef} ";";
 public:
   List const_def_list;
   std::unique_ptr<BaseAST> btype;
@@ -136,6 +137,28 @@ public:
       item.second->Dump();
     }
     std::cout << " }";
+  }
+
+  void toDot(std::string& dot) override { // ConstDecl     ::= "const" BType ConstDef {"," ConstDef} ";"; 需要显示终结符，并单独设为一个field, 就像LValAST那样
+    std::string node_id = getUniqueID();
+    std::string node_def = node_id + "[label=\"<f0> const | <f1> BType";
+    for(int i = 0; i < const_def_list.size(); i++) {
+      if(i == 0) {
+        node_def += " | <f" + std::to_string(i*2 + 2) + "> ConstDef";
+      } else {
+        node_def += " | <f" + std::to_string(i*2 - 1) + "> , | <f" + std::to_string(i*2) + "> ConstDef";
+      }
+    }
+    node_def += " | <f" + std::to_string(const_def_list.size()*2 + 1) + "> ;\"];\n";
+    dot += node_def;
+
+    btype->toDot(dot);
+    dot += "\"" + node_id + "\":f1 ->" + "\"" + btype->getUniqueID() + "\";\n";
+
+    for(int i = 0; i < const_def_list.size(); i++) {
+      const_def_list[i].second->toDot(dot);
+      dot += "\"" + node_id + "\":f" + std::to_string(i*2 + 2) + " ->" + "\"" + const_def_list[i].second->getUniqueID() + "\";\n";
+    }
   }
 };
 
@@ -160,13 +183,17 @@ public:
     std::cout << " }";
   }
 
-  /* void toDot(std::string& dot) const override { // VarDecl       ::= BType VarDef {"," VarDef} ";";
+    void toDot(std::string& dot) override { // VarDecl       ::= BType VarDef {"," VarDef} ";"; 需要显示终结符，并单独设为一个field, 就像上文那样
     std::string node_id = getUniqueID();
-    std::string node_def = node_id + "[label=\"<f0> BType | <f1> VarDef";
+    std::string node_def = node_id + "[label=\"<f0> BType";
     for(int i = 0; i < var_def_list.size(); i++) {
-      node_def += " | <f" + std::to_string(i + 2) + "> VarDef";
+      if(i == 0) {
+        node_def += " | <f" + std::to_string(i*2 + 1) + "> VarDef";
+      } else {
+        node_def += " | <f" + std::to_string(i*2 + 1) + "> , | <f" + std::to_string(i*2 + 2) + "> VarDef";
+      }
     }
-    node_def += "\"];\n";
+    node_def += " | <f" + std::to_string(var_def_list.size()*2 + 1) + "> ;\"];\n";
     dot += node_def;
 
     btype->toDot(dot);
@@ -174,10 +201,10 @@ public:
 
     for(int i = 0; i < var_def_list.size(); i++) {
       var_def_list[i].second->toDot(dot);
-      dot += "\"" + node_id + "\":f" + std::to_string(i + 1) + " ->" + "\"" + var_def_list[i].second->getUniqueID() + "\";\n";
+      dot += "\"" + node_id + "\":f" + std::to_string(i*2 + 1) + " ->" + "\"" + var_def_list[i].second->getUniqueID() + "\";\n";
     }
     
-  } */
+  }
 
 };
 
@@ -189,18 +216,18 @@ public:
         std::cout << "BType { " << btype << " }";
     }
 
-    /* void toDot(std::string& dot) const override {
+    void toDot(std::string& dot) override  {
       // 生成当前节点的唯一标识符
       std::string node_id = getUniqueID();
       std::string node_label = "BType: " + btype;  // 直接将类型名称加入标签
       std::string node_def = node_id + " [label=\"" + node_label + "\"];\n";
       dot += node_def;
-    } */
+    }
 
 
 };
 
-class ConstDefAST : public BaseAST {
+class ConstDefAST : public BaseAST { // ConstDef      ::= IDENT {"[" ConstExp "]"} "=" ConstInitVal;
 public:
     std::string ident;
     std::unique_ptr<BaseAST> const_init_val;
@@ -224,7 +251,26 @@ public:
         const_init_val->Dump();
         std::cout << " }";
     }
+
+
+    void toDot(std::string& dot) override  { // ConstDef      ::= IDENT {"[" ConstExp "]"} "=" ConstInitVal; 需要显示终结符，并单独设为一个field, 就像LValAST那样
+        std::string node_id = getUniqueID();
+        std::string node_def = node_id + "[label=\"<f0> IDENT: " + ident;
+        for(int i = 0; i < const_exp_list.size(); i++) {
+            node_def += " | <f" + std::to_string(i*3 + 1) + "> [" + " | <f" + std::to_string(i*3 + 2) + "> ConstExp" + " | <f" + std::to_string(i*3 + 3) + "> ]";
+        }
+        node_def += " | <f" + std::to_string(const_exp_list.size()*3 + 1) + "> = | <f" + std::to_string(const_exp_list.size()*3 + 2) + "> ConstInitVal\"];\n";
+        dot += node_def;
+
+        for(int i = 0; i < const_exp_list.size(); i++) {
+            const_exp_list[i].second->toDot(dot);
+            dot += "\"" + node_id + "\":f" + std::to_string(i*3 + 2) + " ->" + "\"" + const_exp_list[i].second->getUniqueID() + "\";\n";
+        }
+
+        const_init_val->toDot(dot);
+        dot += "\"" + node_id + "\":f" + std::to_string(const_exp_list.size() + 2) + " ->" + "\"" + const_init_val->getUniqueID() + "\";\n";
     
+    }
 };
 
 class VarDefAST : public BaseAST { // VarDef        ::= IDENT {"[" ConstExp "]"} | IDENT {"[" ConstExp "]"} "=" InitVal;
@@ -262,8 +308,104 @@ public:
     }
     std::cout << " }";
   }
+  // VarDef        ::= IDENT {"[" ConstExp "]"} | IDENT {"[" ConstExp "]"} "=" InitVal;
+  void toDot(std::string& dot) override  {
+    std::string node_id = getUniqueID();
+    if(type == Type::IDENT) { // VarDef        ::= IDENT {"[" ConstExp "]"} ;
+      std::string node_def = node_id + "[label=\"<f0> IDENT: " + ident;
+      for(int i = 0; i < const_exp_list.size(); i++) {
+        node_def += " | <f" + std::to_string(i*3 + 1) + "> [" + " | <f" + std::to_string(i*3 + 2) + "> ConstExp" + " | <f" + std::to_string(i*3 + 3) + "> ]";
+      }
+      node_def += "\"];\n";
+      dot += node_def;
+
+      for(int i = 0; i < const_exp_list.size(); i++) {
+        const_exp_list[i].second->toDot(dot);
+        dot += "\"" + node_id + "\":f" + std::to_string(i*3 + 2) + " ->" + "\"" + const_exp_list[i].second->getUniqueID() + "\";\n";
+      }
+    } else if(type == Type::INIT) { // VarDef        ::= IDENT {"[" ConstExp "]"} "=" InitVal;
+      std::string node_def = node_id + "[label=\"<f0> IDENT: " + ident;
+      for(int i = 0; i < const_exp_list.size(); i++) {
+        node_def += " | <f" + std::to_string(i*3 + 1) + "> [" + " | <f" + std::to_string(i*3 + 2) + "> ConstExp" + " | <f" + std::to_string(i*3 + 3) + "> ]";
+      }
+      node_def += " | <f" + std::to_string(const_exp_list.size()*3 + 1) + "> = | <f" + std::to_string(const_exp_list.size()*3 + 2) + "> InitVal\"];\n";
+      dot += node_def;
+
+      for(int i = 0; i < const_exp_list.size(); i++) {
+        const_exp_list[i].second->toDot(dot);
+        dot += "\"" + node_id + "\":f" + std::to_string(i*3 + 2) + " ->" + "\"" + const_exp_list[i].second->getUniqueID() + "\";\n";
+      }
+
+      init_val->toDot(dot);
+      dot += "\"" + node_id + "\":f" + std::to_string(const_exp_list.size()*3 + 2) + " ->" + "\"" + init_val->getUniqueID() + "\";\n";
+    } else {
+      std::cerr << "VarDefAST::toDot: unknown type" << std::endl;
+    }
+  }
 
 };
+
+class InitValAST : public BaseAST { // InitVal       ::= Exp | "{" [InitVal {"," InitVal}] "}"; 单个符号例如 '{'也需要单独设置一个field 
+public:
+    enum class Type { EXP, ARRAY } type;
+    std::unique_ptr<BaseAST> exp;
+    List init_val_list;
+
+    InitValAST(std::unique_ptr<BaseAST> &_exp) : exp(std::move(_exp)) { type = Type::EXP; }
+    InitValAST(List &_init_val_list) {
+        for(auto &item : _init_val_list) {
+            init_val_list.push_back(std::make_pair(item.first, std::move(item.second)));
+        }
+        type = Type::ARRAY;
+    }
+
+    void Dump() const override {
+        std::cout << "InitValAST { ";
+        switch (type) {
+            case Type::EXP:
+                exp->Dump();
+                break;
+            case Type::ARRAY:
+                for(auto &item : init_val_list) {
+                    item.second->Dump();
+                }
+                break;
+            default:
+                break;
+        }
+        std::cout << " }";
+    }
+    // InitVal       ::= Exp | "{" [InitVal {"," InitVal}] "}"; 需要显示终结符作为单独field
+    void toDot(std::string& dot) override {
+      std::string node_id = getUniqueID();
+      if(type == Type::EXP) { // InitVal       ::= Exp;
+        std::string node_def = node_id + "[label=\"<f0> Exp\"];\n";
+        dot += node_def;
+        exp->toDot(dot);
+        dot += "\"" + node_id + "\":f0 ->" + "\"" + exp->getUniqueID() + "\";\n";
+      } else if(type == Type::ARRAY) { // InitVal       ::= "{" [InitVal {"," InitVal}] "}";
+        if(init_val_list.size() == 0) { // InitVal       ::= "{" "}"; 为空数组
+          std::string node_def = node_id + "[label=\"<f0> \\{ |<f1> \\}" + "\"];\n"; 
+          dot += node_def;
+        } else { // InitVal       ::= "{" InitVal {"," InitVal} "}"; 至少有一个InitVal，需要显示大括号注意使用转义符
+          std::string node_def = node_id + "[label=\"<f0> \\{ | <f1> InitVal";
+          for(int i = 1; i < init_val_list.size() && init_val_list.size() > 1; i++) {
+            node_def += " | <f" + std::to_string(i*2 + 1) + "> , | <f" + std::to_string(i*2 + 2) + "> InitVal";
+          }
+          node_def += " | <f" + std::to_string(init_val_list.size()*2 + 1) + "> \\}" + "\"];\n"; // 最后一个是"}
+          dot += node_def;
+
+          for(int i = 0; i < init_val_list.size(); i++) {
+            init_val_list[i].second->toDot(dot);
+            dot += "\"" + node_id + "\":f" + std::to_string(i*2 + 1) + " ->" + "\"" + init_val_list[i].second->getUniqueID() + "\";\n";
+          }
+        }
+      } else {
+        std::cerr << "InitValAST::toDot: unknown type" << std::endl;
+      }
+    }
+};
+
 class ConstInitValAST : public BaseAST { // ConstInitVal  ::= ConstExp | "{" [ConstInitVal {"," ConstInitVal}] "}";
 public:
     enum class Type { CONSTEXP, ARRAY } type;
@@ -295,40 +437,37 @@ public:
         std::cout << " }";
     }
 
+    void toDot(std::string& dot) override {
+      std::string node_id = getUniqueID();
+      if(type == Type::CONSTEXP) { // ConstInitVal  ::= ConstExp;
+        std::string node_def = node_id + "[label=\"<f0> ConstExp\"];\n";
+        dot += node_def;
+        const_exp->toDot(dot);
+        dot += "\"" + node_id + "\":f0 ->" + "\"" + const_exp->getUniqueID() + "\";\n";
+      } else if(type == Type::ARRAY) { // ConstInitVal  ::= "{" [ConstInitVal {"," ConstInitVal}] "}";
+        if(const_init_val_list.size() == 0) { // ConstInitVal  ::= "{" "}"; 为空数组
+          std::string node_def = node_id + "[label=\"<f0> \\{ |<f1> \\}" + "\"];\n"; 
+          dot += node_def;
+        } else { // ConstInitVal  ::= "{" ConstInitVal {"," ConstInitVal} "}"; 至少有一个ConstInitVal，需要显示大括号注意使用转义符
+          std::string node_def = node_id + "[label=\"<f0> \\{ | <f1> ConstInitVal";
+          for(int i = 1; i < const_init_val_list.size() && const_init_val_list.size() > 1; i++) {
+            node_def += " | <f" + std::to_string(i*2 + 1) + "> , | <f" + std::to_string(i*2 + 2) + "> ConstInitVal";
+          }
+          node_def += " | <f" + std::to_string(const_init_val_list.size()*2 + 1) + "> \\}" + "\"];\n"; // 最后一个是"}
+          dot += node_def;
+
+          for(int i = 0; i < const_init_val_list.size(); i++) {
+            const_init_val_list[i].second->toDot(dot);
+            dot += "\"" + node_id + "\":f" + std::to_string(i*2 + 1) + " ->" + "\"" + const_init_val_list[i].second->getUniqueID() + "\";\n";
+          }
+        }
+      } else {
+        std::cerr << "ConstInitValAST::toDot: unknown type" << std::endl;
+      }
+    }
 };
 
-class InitValAST : public BaseAST { // ConstInitVal  ::= ConstExp | "{" [ConstInitVal {"," ConstInitVal}] "}";
-public:
-    enum class Type { EXP, ARRAY } type;
-    std::unique_ptr<BaseAST> exp;
-    List init_val_list;
 
-    InitValAST(std::unique_ptr<BaseAST> &_exp) : exp(std::move(_exp)) { type = Type::EXP; }
-    InitValAST(List &_init_val_list) {
-        for(auto &item : _init_val_list) {
-            init_val_list.push_back(std::make_pair(item.first, std::move(item.second)));
-        }
-        type = Type::ARRAY;
-    }
-
-    void Dump() const override {
-        std::cout << "InitValAST { ";
-        switch (type) {
-            case Type::EXP:
-                exp->Dump();
-                break;
-            case Type::ARRAY:
-                for(auto &item : init_val_list) {
-                    item.second->Dump();
-                }
-                break;
-            default:
-                break;
-        }
-        std::cout << " }";
-    }
-
-};
 
 class ConstExpAST : public BaseAST {
 public:
@@ -338,6 +477,14 @@ public:
         std::cout << "ConstExpAST { ";
         exp->Dump();
         std::cout << " }";
+    }
+
+    void toDot(std::string& dot) override {
+        std::string node_id = getUniqueID();
+        std::string node_def = node_id + "[label=\"<f0> Exp\"];\n";
+        dot += node_def;
+        exp->toDot(dot);
+        dot += "\"" + node_id + "\":f0 ->" + "\"" + exp->getUniqueID() + "\";\n";
     }
 };
 
@@ -543,7 +690,7 @@ public:
   }
 };
 
-class FuncRParamsAST : public BaseAST {
+class FuncRParamsAST : public BaseAST { // FuncRParams   ::= Exp {"," Exp};
 public:
   List exp_list;
   FuncRParamsAST(List &_exp_list) {
@@ -558,6 +705,26 @@ public:
     }
     std::cout << " }";
   }
+
+  void toDot(std::string &dot) override {// FuncRParams   ::= Exp {"," Exp};
+    std::string node_id = getUniqueID();
+    std::string node_def = node_id + "[label=\"<f0> Exp";
+    for(int i = 0; i < exp_list.size(); i++) {
+      if(i == 0) {
+        node_def += " | <f" + std::to_string(i*2 + 0) + "> Exp";
+      } else {
+        node_def += " | <f" + std::to_string(i*2 - 1) + "> , | <f" + std::to_string(i*2) + "> Exp";
+      }
+    }
+    node_def += "\"];\n";
+    dot += node_def;
+
+    for(int i = 0; i < exp_list.size(); i++) {
+      exp_list[i].second->toDot(dot);
+      dot += "\"" + node_id + "\":f" + std::to_string(i*2) + " ->" + "\"" + exp_list[i].second->getUniqueID() + "\";\n";
+    } 
+  }
+
 };
 
 

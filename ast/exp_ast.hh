@@ -1,6 +1,8 @@
 #include "base_ast.hh"
+
+
 // ExpAST
-class ExpAST : public BaseAST {
+class ExpAST : public BaseAST { // Exp           ::= LOrExp;
 public:
   std::unique_ptr<BaseAST> lor_exp;
 
@@ -9,10 +11,17 @@ public:
     lor_exp->Dump();
     std::cout << " }";
   }
+  void toDot(std::string &dot) override {
+    std::string node_id = getUniqueID();
+    std::string node_def = node_id + "[label=\"<f0> LOrExp\"];\n";
+    dot += node_def;
+    lor_exp->toDot(dot);
+    dot += "\"" + node_id + "\":f0 ->" + "\"" + lor_exp->getUniqueID() + "\";\n";
+  }
 };
 
 // UnaryExpAST 
-class UnaryExpAST : public BaseAST {
+class UnaryExpAST : public BaseAST { // UnaryExp      ::= PrimaryExp | IDENT "(" [FuncRParams] ")" | UnaryOp UnaryExp; 需要显示扩号，并单独设为一个field, 就像InitValAST那样
 public:
   enum class Type { PRIMARY, OP , IDENT} type;
   enum class Option {F0, F1} option;
@@ -54,6 +63,33 @@ public:
     }
     std::cout << " }";
   }
+
+  void toDot(std::string &dot) override {
+    std::string node_id = getUniqueID();
+    if(type == Type::PRIMARY) { // UnaryExp      ::= PrimaryExp;
+      std::string node_def = node_id + "[label=\"<f0> PrimaryExp\"];\n";
+      dot += node_def;
+      son_exp->toDot(dot);
+      dot += "\"" + node_id + "\":f0 ->" + "\"" + son_exp->getUniqueID() + "\";\n";
+    } else if(type == Type::OP) { // UnaryExp      ::= UnaryOp UnaryExp;
+      std::string node_def = node_id + "[label=\"<f0> UnaryOp:" + op + " | <f1> UnaryExp\"];\n";
+      dot += node_def;
+      son_exp->toDot(dot);
+      dot += "\"" + node_id + "\":f1 ->" + "\"" + son_exp->getUniqueID() + "\";\n";
+    } else if(type == Type::IDENT) { // UnaryExp      ::= IDENT "(" ")"; 
+      if(option == Option::F0) { // UnaryExp      ::= IDENT "(" ")"; 需要显示扩号，并单独设为一个field, 就像InitValAST那样
+        std::string node_def = node_id + "[label=\"<f0> IDENT: " + ident + " | <f1> \\( | <f2> \\)\"];\n";
+      } else if(option == Option::F1) { // UnaryExp      ::= IDENT "(" FuncRParams ")"; 需要显示扩号，并单独设为一个field, 就像InitValAST那样
+        std::string node_def = node_id + "[label=\"<f0> IDENT: " + ident + " | <f1> \\( | <f2> FuncRParams | <f3> \\)\"];\n";
+        dot += node_def;
+        func_r_params->toDot(dot);
+        dot += "\"" + node_id + "\":f2 ->" + "\"" + func_r_params->getUniqueID() + "\";\n";
+      } 
+    } else {
+      std::cerr << "UnaryExpAST::toDot: unknown type" << std::endl;
+    }
+  }
+
 };
 
 /* 
@@ -78,7 +114,7 @@ ConstExp      ::= Exp;
       block_item_list.push_back(std::make_pair(item.first, std::move(item.second)));
     } */
 
-class LValAST : public BaseAST {
+class LValAST : public BaseAST { // LVal          ::= IDENT {"[" Exp "]"};
 public:
 
   std::string ident;
@@ -101,10 +137,24 @@ public:
     std::cout << " }";
   }
 
+  void toDot(std::string &dot) override { // LVal          ::= IDENT {"[" Exp "]"}; 需要显示扩号，并单独设为一个field, 就像LValAST那样
+    std::string node_id = getUniqueID();
+    std::string node_def = node_id + "[label=\"<f0> IDENT: " + ident;
+    for(int i = 0; i < exp_list.size(); i++) {
+      node_def += " | <f" + std::to_string(i*3 + 1) + "> \\[" + " | <f" + std::to_string(i*3 + 2) + "> Exp | <f" + std::to_string(i*3 + 3) + "> \\]";
+    }
+    node_def += "\"];\n";
+    dot += node_def;
+    for(int i = 0; i < exp_list.size(); i++) {
+      exp_list[i].second->toDot(dot);
+      dot += "\"" + node_id + "\":f" + std::to_string(i*3 + 2) + " ->" + "\"" + exp_list[i].second->getUniqueID() + "\";\n";
+    }
+  }
+
 };
 
 // PrimaryExpAST
-class PrimaryExpAST : public BaseAST {
+class PrimaryExpAST : public BaseAST { // PrimaryExp    ::= "(" Exp ")" | LVal | Number; 需要显示扩号，并单独设为一个field, 就像LValAST那样
 public:
   enum class Type { EXP, NUMBER, LVAL } type;
   std::unique_ptr<BaseAST> exp_or_lval;
@@ -132,9 +182,31 @@ public:
     }
     std::cout << " }";
   }
+
+  void toDot(std::string &dot) override { // PrimaryExp    ::= "(" Exp ")" | LVal | Number; 需要显示扩号，并单独设为一个field, 就像LValAST那样
+    std::string node_id = getUniqueID();
+    if(type == Type::EXP) { // PrimaryExp    ::= "(" Exp ")";
+      std::string node_def = node_id + "[label=\"<f0> \\( | <f1> Exp | <f2> \\)\"];\n";
+      dot += node_def;
+      exp_or_lval->toDot(dot);
+      dot += "\"" + node_id + "\":f1 ->" + "\"" + exp_or_lval->getUniqueID() + "\";\n";
+    } else if(type == Type::NUMBER) { // PrimaryExp    ::= Number;
+      std::string node_def = node_id + "[label=\"<f0> Number: " + std::to_string(number) + "\"];\n";
+      dot += node_def;
+    } else if(type == Type::LVAL) { // PrimaryExp    ::= LVal;
+      std::string node_def = node_id + "[label=\"<f0> LVal\"];\n";
+      dot += node_def;
+      exp_or_lval->toDot(dot);
+      dot += "\"" + node_id + "\":f0 ->" + "\"" + exp_or_lval->getUniqueID() + "\";\n";
+    } else {
+      std::cerr << "PrimaryExpAST::toDot: unknown type" << std::endl;
+    }
+  
+  }
+
 };
 
-class MulExpAST : public BaseAST {
+class MulExpAST : public BaseAST { // MulExp        ::= UnaryExp | MulExp ("*" | "/" | "%") UnaryExp; 需要显示扩号，并单独设为一个field, 就像LValAST那样
 public:
   enum class Type { UNARYEXP, MULEXP} type;
   std::unique_ptr<BaseAST> unary_exp;
@@ -169,9 +241,30 @@ public:
       }
       std::cout << " }";
     }
+
+  void toDot(std::string &dot) override { // MulExp        ::= UnaryExp | MulExp ("*" | "/" | "%") UnaryExp; 需要显示终结符，并单独设为一个field, 就像LValAST那样
+    std::string node_id = getUniqueID();
+    if(type == Type::UNARYEXP) { // MulExp        ::= UnaryExp;
+      std::string node_def = node_id + "[label=\"<f0> UnaryExp\"];\n";
+      dot += node_def;
+      unary_exp->toDot(dot);
+      dot += "\"" + node_id + "\":f0 ->" + "\"" + unary_exp->getUniqueID() + "\";\n";
+    } else if(type == Type::MULEXP) { // MulExp        ::= MulExp ("*" | "/" | "%") UnaryExp;
+      std::string node_def = node_id + "[label=\"<f0> MulExp | <f1> " + op + " | <f2> UnaryExp\"];\n";
+      dot += node_def;
+      mul_exp->toDot(dot);
+      dot += "\"" + node_id + "\":f0 ->" + "\"" + mul_exp->getUniqueID() + "\";\n";
+      unary_exp->toDot(dot);
+      dot += "\"" + node_id + "\":f2 ->" + "\"" + unary_exp->getUniqueID() + "\";\n";
+    } else {
+      std::cerr << "MulExpAST::toDot: unknown type" << std::endl;
+    }
+  
+  }
+
 };
 
-class AddExpAST : public BaseAST {
+class AddExpAST : public BaseAST { // AddExp        ::= MulExp | AddExp ("+" | "-") MulExp;
 public:
   enum class Type { MULEXP, ADDEXP} type;
   std::unique_ptr<BaseAST> mul_exp;
@@ -206,9 +299,29 @@ public:
     }
     std::cout << " }";
   }
+
+  void toDot(std::string &dot) override {
+    std::string node_id = getUniqueID();
+    if(type == Type::MULEXP) { // AddExp        ::= MulExp;
+      std::string node_def = node_id + "[label=\"<f0> MulExp\"];\n";
+      dot += node_def;
+      mul_exp->toDot(dot);
+      dot += "\"" + node_id + "\":f0 ->" + "\"" + mul_exp->getUniqueID() + "\";\n";
+    } else if(type == Type::ADDEXP) { // AddExp        ::= AddExp ("+" | "-") MulExp;
+      std::string node_def = node_id + "[label=\"<f0> AddExp | <f1> " + op + " | <f2> MulExp\"];\n";
+      dot += node_def;
+      add_exp->toDot(dot);
+      dot += "\"" + node_id + "\":f0 ->" + "\"" + add_exp->getUniqueID() + "\";\n";
+      mul_exp->toDot(dot);
+      dot += "\"" + node_id + "\":f2 ->" + "\"" + mul_exp->getUniqueID() + "\";\n";
+    } else {
+      std::cerr << "AddExpAST::toDot: unknown type" << std::endl;
+    }
+  }
+
 };
 
-class RelExpAST : public BaseAST {
+class RelExpAST : public BaseAST { // RelExp        ::= AddExp | RelExp ("<" | ">" | "<=" | ">=") AddExp;
 public:
   enum class Type {ADDEXP, RELEXP} type;
   std::unique_ptr<BaseAST> add_exp;
@@ -242,9 +355,29 @@ public:
     }
     std::cout << " }";
   }
+
+  void toDot(std::string &dot) override {
+    std::string node_id = getUniqueID();
+    if(type == Type::ADDEXP) { // RelExp        ::= AddExp;
+      std::string node_def = node_id + "[label=\"<f0> AddExp\"];\n";
+      dot += node_def;
+      add_exp->toDot(dot);
+      dot += "\"" + node_id + "\":f0 ->" + "\"" + add_exp->getUniqueID() + "\";\n";
+    } else if(type == Type::RELEXP) { // RelExp        ::= RelExp ("<" | ">" | "<=" | ">=") AddExp;
+      std::string node_def = node_id + "[label=\"<f0> RelExp | <f1> " + op + " | <f2> AddExp\"];\n";
+      dot += node_def;
+      rel_exp->toDot(dot);
+      dot += "\"" + node_id + "\":f0 ->" + "\"" + rel_exp->getUniqueID() + "\";\n";
+      add_exp->toDot(dot);
+      dot += "\"" + node_id + "\":f2 ->" + "\"" + add_exp->getUniqueID() + "\";\n";
+    } else {
+      std::cerr << "RelExpAST::toDot: unknown type" << std::endl;
+    }
+  }
+
 };
 
-class EqExpAST : public BaseAST {
+class EqExpAST : public BaseAST { // EqExp         ::= RelExp | EqExp ("==" | "!=") RelExp;
 public:
   enum class Type {RELEXP, EQEXP} type;
   std::unique_ptr<BaseAST> rel_exp;
@@ -278,9 +411,29 @@ public:
     }
     std::cout << " }";
   }
+
+  void toDot(std::string &dot) override {
+    std::string node_id = getUniqueID();
+    if(type == Type::RELEXP) { // EqExp         ::= RelExp;
+      std::string node_def = node_id + "[label=\"<f0> RelExp\"];\n";
+      dot += node_def;
+      rel_exp->toDot(dot);
+      dot += "\"" + node_id + "\":f0 ->" + "\"" + rel_exp->getUniqueID() + "\";\n";
+    } else if(type == Type::EQEXP) { // EqExp         ::= EqExp ("==" | "!=") RelExp;
+      std::string node_def = node_id + "[label=\"<f0> EqExp | <f1> " + op + " | <f2> RelExp\"];\n";
+      dot += node_def;
+      eq_exp->toDot(dot);
+      dot += "\"" + node_id + "\":f0 ->" + "\"" + eq_exp->getUniqueID() + "\";\n";
+      rel_exp->toDot(dot);
+      dot += "\"" + node_id + "\":f2 ->" + "\"" + rel_exp->getUniqueID() + "\";\n";
+    } else {
+      std::cerr << "EqExpAST::toDot: unknown type" << std::endl;
+    }
+  }
+
 };
 
-class LAndExpAST : public BaseAST {
+class LAndExpAST : public BaseAST { // LAndExp       ::= EqExp | LAndExp "&&" EqExp;
 public:
   enum class Type {EQEXP, LANDEXP} type;
   std::unique_ptr<BaseAST> eq_exp;
@@ -313,6 +466,25 @@ public:
       break;
     }
     std::cout << " }";
+  }
+
+  void toDot(std::string &dot) override {
+    std::string node_id = getUniqueID();
+    if(type == Type::EQEXP) { // LAndExp       ::= EqExp;
+      std::string node_def = node_id + "[label=\"<f0> EqExp\"];\n";
+      dot += node_def;
+      eq_exp->toDot(dot);
+      dot += "\"" + node_id + "\":f0 ->" + "\"" + eq_exp->getUniqueID() + "\";\n";
+    } else if(type == Type::LANDEXP) { // LAndExp       ::= LAndExp "&&" EqExp;
+      std::string node_def = node_id + "[label=\"<f0> LAndExp | <f1> && | <f2> EqExp\"];\n";
+      dot += node_def;
+      land_exp->toDot(dot);
+      dot += "\"" + node_id + "\":f0 ->" + "\"" + land_exp->getUniqueID() + "\";\n";
+      eq_exp->toDot(dot);
+      dot += "\"" + node_id + "\":f2 ->" + "\"" + eq_exp->getUniqueID() + "\";\n";
+    } else {
+      std::cerr << "LAndExpAST::toDot: unknown type" << std::endl;
+    }
   }
 };
 
@@ -349,5 +521,24 @@ public:
       break;
     }
     std::cout << " }";
+  }
+
+  void toDot(std::string &dot) override {
+    std::string node_id = getUniqueID();
+    if(type == Type::LANDEXP) { // LOrExp       ::= LAndExp;
+      std::string node_def = node_id + "[label=\"<f0> LAndExp\"];\n";
+      dot += node_def;
+      land_exp->toDot(dot);
+      dot += "\"" + node_id + "\":f0 ->" + "\"" + land_exp->getUniqueID() + "\";\n";
+    } else if(type == Type::LOREXP) { // LOrExp       ::= LOrExp "||" LAndExp;
+      std::string node_def = node_id + "[label=\"<f0> LOrExp | <f1> || | <f2> LAndExp\"];\n";
+      dot += node_def;
+      lor_exp->toDot(dot);
+      dot += "\"" + node_id + "\":f0 ->" + "\"" + lor_exp->getUniqueID() + "\";\n";
+      land_exp->toDot(dot);
+      dot += "\"" + node_id + "\":f2 ->" + "\"" + land_exp->getUniqueID() + "\";\n";
+    } else {
+      std::cerr << "LOrExpAST::toDot: unknown type" << std::endl;
+    }
   }
 };

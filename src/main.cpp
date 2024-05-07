@@ -35,5 +35,16 @@ int main(int argc, const char *argv[]) {
   cout << endl;
   ast->Dump();
   cout << endl << endl;
+
+  // .dot
+  string dot = "digraph G {\n";
+  dot += "node [shape = record,height=.1]\n";
+  dot += "node0[label = \"<f0> CompUnit\"];\n";
+
+  dot += "\"node0\":f0 ->\"" + ast->getUniqueID() + "\";\n";
+  ast->toDot(dot);
+  dot += "}\n";
+  cout << dot << endl;
+
   return 0;
 }
