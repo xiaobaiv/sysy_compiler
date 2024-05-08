@@ -1,6 +1,21 @@
 # SysY Compiler 
----
-本实验参考北大编译原理实验指导文档：https://pku-minic.github.io/online-doc/#/ ，目前完成了语法分析和AST的构建，使用graphviz工具进行AST的绘制，后续将会完成IR和目标代码的生成。
+
+    本实验参考北大编译原理实验指导文档：https://pku-minic.github.io/online-doc/#/ ，目前完成了语法分析和AST的构建，使用graphviz工具进行AST的绘制，后续将会完成IR和目标代码的生成。
+
+## Run
+
+```bash
+# 获取项目文件
+git clone https://github.com/xiaobaiv/sysy_compiler.git
+# 拉取docker image
+docker pull guozhengwu/compiler-dev
+# 运行容器，挂载项目文件
+docker run -it --rm -v <项目文件> guozhengwu/compiler-dev bash
+# 在bash中执行以下命令，得到结果
+make
+build/compiler -koopa /root/compiler/sysy-make-template/debug/hello.c -o /root/compiler/sysy-make-template/debug/hello.koopa
+
+```
 
 ## 测试用例
 
@@ -25,16 +40,3 @@ int main() {
 ## 输出结果
 ![Alt text](plot/Tree.png)
 
-
-## Docker
-
-```bash
-# 拉取docker image
-docker pull guozhengwu/compiler-dev
-# 运行容器，注意项目应位于挂载目录下
-docker run -it --rm -v <挂载目录> guozhengwu/compiler-dev bash
-# 在bash中执行以下命令
-make
-build/compiler -koopa /root/compiler/sysy-make-template/debug/hello.c -o /root/compiler/sysy-make-template/debug/hello.koopa
-
-```
