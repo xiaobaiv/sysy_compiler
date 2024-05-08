@@ -12,7 +12,7 @@ class BaseAST {
 
   virtual void Dump() const = 0;
 
-  virtual void toDot(std::string& dot) {};
+  virtual void toDot(std::string& dot) const = 0;
 
   // 为了区分, 我们为每个 AST 节点生成一个唯一的 ID
   virtual std::string getUniqueID() const {

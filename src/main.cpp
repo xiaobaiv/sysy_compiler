@@ -3,6 +3,9 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <fstream>
+#include <cstdlib>
+#include <cassert>
 #include "/root/compiler/sysy-make-template/ast/ast.hh"
 using namespace std;
 
@@ -45,6 +48,27 @@ int main(int argc, const char *argv[]) {
   ast->toDot(dot);
   dot += "}\n";
   cout << dot << endl;
+
+  // 创建或覆盖 Tree.dot 文件
+    string dotFilePath = "./plot/Tree.dot";
+    ofstream dotFile(dotFilePath, ios::out | ios::trunc);
+    if (dotFile.is_open()) {
+        dotFile << dot;
+        dotFile.close();
+    } else {
+        cerr << "无法打开文件 " << dotFilePath << endl;
+        return -1;
+    }
+
+    // 调用系统命令生成 PNG 图像文件
+    string cmd = "dot -Tpng " + dotFilePath + " -o ./plot/Tree.png";
+    int systemRet = system(cmd.c_str());
+    if (systemRet != 0) {
+        cerr << "命令执行失败: " << cmd << endl;
+        return -1;
+    }
+
+    cout << "AST 已经被成功输出到 /plot/Tree.png" << endl;
 
   return 0;
 }

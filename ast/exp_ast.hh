@@ -11,7 +11,7 @@ public:
     lor_exp->Dump();
     std::cout << " }";
   }
-  void toDot(std::string &dot) override {
+  void toDot(std::string& dot) const override  {
     std::string node_id = getUniqueID();
     std::string node_def = node_id + "[label=\"<f0> LOrExp\"];\n";
     dot += node_def;
@@ -64,7 +64,7 @@ public:
     std::cout << " }";
   }
 
-  void toDot(std::string &dot) override {
+  void toDot(std::string& dot) const override  {
     std::string node_id = getUniqueID();
     if(type == Type::PRIMARY) { // UnaryExp      ::= PrimaryExp;
       std::string node_def = node_id + "[label=\"<f0> PrimaryExp\"];\n";
@@ -137,7 +137,7 @@ public:
     std::cout << " }";
   }
 
-  void toDot(std::string &dot) override { // LVal          ::= IDENT {"[" Exp "]"}; 需要显示扩号，并单独设为一个field, 就像LValAST那样
+  void toDot(std::string& dot) const override  { // LVal          ::= IDENT {"[" Exp "]"}; 需要显示扩号，并单独设为一个field, 就像LValAST那样
     std::string node_id = getUniqueID();
     std::string node_def = node_id + "[label=\"<f0> IDENT: " + ident;
     for(int i = 0; i < exp_list.size(); i++) {
@@ -183,7 +183,7 @@ public:
     std::cout << " }";
   }
 
-  void toDot(std::string &dot) override { // PrimaryExp    ::= "(" Exp ")" | LVal | Number; 需要显示扩号，并单独设为一个field, 就像LValAST那样
+  void toDot(std::string& dot) const override  { // PrimaryExp    ::= "(" Exp ")" | LVal | Number; 需要显示扩号，并单独设为一个field, 就像LValAST那样
     std::string node_id = getUniqueID();
     if(type == Type::EXP) { // PrimaryExp    ::= "(" Exp ")";
       std::string node_def = node_id + "[label=\"<f0> \\( | <f1> Exp | <f2> \\)\"];\n";
@@ -242,7 +242,7 @@ public:
       std::cout << " }";
     }
 
-  void toDot(std::string &dot) override { // MulExp        ::= UnaryExp | MulExp ("*" | "/" | "%") UnaryExp; 需要显示终结符，并单独设为一个field, 就像LValAST那样
+  void toDot(std::string& dot) const override  { // MulExp        ::= UnaryExp | MulExp ("*" | "/" | "%") UnaryExp; 需要显示终结符，并单独设为一个field, 就像LValAST那样
     std::string node_id = getUniqueID();
     if(type == Type::UNARYEXP) { // MulExp        ::= UnaryExp;
       std::string node_def = node_id + "[label=\"<f0> UnaryExp\"];\n";
@@ -300,7 +300,7 @@ public:
     std::cout << " }";
   }
 
-  void toDot(std::string &dot) override {
+  void toDot(std::string& dot) const override  {
     std::string node_id = getUniqueID();
     if(type == Type::MULEXP) { // AddExp        ::= MulExp;
       std::string node_def = node_id + "[label=\"<f0> MulExp\"];\n";
@@ -356,7 +356,7 @@ public:
     std::cout << " }";
   }
 
-  void toDot(std::string &dot) override {
+  void toDot(std::string& dot) const override  {
     std::string node_id = getUniqueID();
     if(type == Type::ADDEXP) { // RelExp        ::= AddExp;
       std::string node_def = node_id + "[label=\"<f0> AddExp\"];\n";
@@ -412,7 +412,7 @@ public:
     std::cout << " }";
   }
 
-  void toDot(std::string &dot) override {
+  void toDot(std::string& dot) const override  {
     std::string node_id = getUniqueID();
     if(type == Type::RELEXP) { // EqExp         ::= RelExp;
       std::string node_def = node_id + "[label=\"<f0> RelExp\"];\n";
@@ -468,7 +468,7 @@ public:
     std::cout << " }";
   }
 
-  void toDot(std::string &dot) override {
+  void toDot(std::string& dot) const override  {
     std::string node_id = getUniqueID();
     if(type == Type::EQEXP) { // LAndExp       ::= EqExp;
       std::string node_def = node_id + "[label=\"<f0> EqExp\"];\n";
@@ -523,7 +523,7 @@ public:
     std::cout << " }";
   }
 
-  void toDot(std::string &dot) override {
+  void toDot(std::string& dot) const override  {
     std::string node_id = getUniqueID();
     if(type == Type::LANDEXP) { // LOrExp       ::= LAndExp;
       std::string node_def = node_id + "[label=\"<f0> LAndExp\"];\n";
