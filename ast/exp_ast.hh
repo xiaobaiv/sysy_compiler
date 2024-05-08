@@ -1,7 +1,5 @@
 #include "base_ast.hh"
 
-
-// ExpAST
 class ExpAST : public BaseAST { // Exp           ::= LOrExp;
 public:
   std::unique_ptr<BaseAST> lor_exp;
@@ -20,8 +18,97 @@ public:
   }
 };
 
-// UnaryExpAST 
-class UnaryExpAST : public BaseAST { // UnaryExp      ::= PrimaryExp | IDENT "(" [FuncRParams] ")" | UnaryOp UnaryExp; 需要显示扩号，并单独设为一个field, 就像InitValAST那样
+class LValAST : public BaseAST { // LVal          ::= IDENT {"[" Exp "]"};
+public:
+  std::string ident;
+  List exp_list;
+
+  LValAST(std::string &_ident, List &_exp_list) {
+    ident = _ident;
+    for (auto &exp : _exp_list) {
+      exp_list.push_back(std::make_pair(exp.first, std::move(exp.second)));
+    }
+  }
+
+  void Dump() const override {
+    std::cout << "LValAST { " << ident;
+    for (auto &exp : exp_list) {
+      std::cout << "[";
+      exp.second->Dump();
+      std::cout << "]";
+    }
+    std::cout << " }";
+  }
+
+  void toDot(std::string& dot) const override  { // LVal          ::= IDENT {"[" Exp "]"}; 需要显示扩号，并单独设为一个field, 就像LValAST那样
+    std::string node_id = getUniqueID();
+    std::string node_def = node_id + "[label=\"<f0> IDENT: " + ident;
+    for(int i = 0; i < exp_list.size(); i++) {
+      node_def += " | <f" + std::to_string(i*3 + 1) + "> \\[" + " | <f" + std::to_string(i*3 + 2) + "> Exp | <f" + std::to_string(i*3 + 3) + "> \\]";
+    }
+    node_def += "\"];\n";
+    dot += node_def;
+    for(int i = 0; i < exp_list.size(); i++) {
+      exp_list[i].second->toDot(dot);
+      dot += "\"" + node_id + "\":f" + std::to_string(i*3 + 2) + " ->" + "\"" + exp_list[i].second->getUniqueID() + "\";\n";
+    }
+  }
+
+};
+
+class PrimaryExpAST : public BaseAST { // PrimaryExp    ::= "(" Exp ")" | LVal | Number;
+public:
+  enum class Type { EXP, NUMBER, LVAL } type;
+  std::unique_ptr<BaseAST> exp_or_lval;
+  int number;
+  PrimaryExpAST() {}
+  PrimaryExpAST(int _number) {
+    type = Type::NUMBER;
+    number = _number;
+  }
+
+  void Dump() const override {
+    std::cout << "PrimaryExpAST { ";
+    switch (type) {
+      case Type::EXP:
+        exp_or_lval->Dump();
+        break;
+      case Type::NUMBER:
+        std::cout << number;
+        break;
+      case Type::LVAL:
+        exp_or_lval->Dump();
+        break;
+      default:
+        break;
+    }
+    std::cout << " }";
+  }
+
+  void toDot(std::string& dot) const override  { // PrimaryExp    ::= "(" Exp ")" | LVal | Number;
+    std::string node_id = getUniqueID();
+    if(type == Type::EXP) { // PrimaryExp    ::= "(" Exp ")";
+      std::string node_def = node_id + "[label=\"<f0> \\( | <f1> Exp | <f2> \\)\"];\n";
+      dot += node_def;
+      exp_or_lval->toDot(dot);
+      dot += "\"" + node_id + "\":f1 ->" + "\"" + exp_or_lval->getUniqueID() + "\";\n";
+    } else if(type == Type::NUMBER) { // PrimaryExp    ::= Number;
+      std::string node_def = node_id + "[label=\"<f0> Number: " + std::to_string(number) + "\"];\n";
+      dot += node_def;
+    } else if(type == Type::LVAL) { // PrimaryExp    ::= LVal;
+      std::string node_def = node_id + "[label=\"<f0> LVal\"];\n";
+      dot += node_def;
+      exp_or_lval->toDot(dot);
+      dot += "\"" + node_id + "\":f0 ->" + "\"" + exp_or_lval->getUniqueID() + "\";\n";
+    } else {
+      std::cerr << "PrimaryExpAST::toDot: unknown type" << std::endl;
+    }
+  
+  }
+
+};
+
+class UnaryExpAST : public BaseAST { // UnaryExp      ::= PrimaryExp | IDENT "(" [FuncRParams] ")" | UnaryOp UnaryExp;
 public:
   enum class Type { PRIMARY, OP , IDENT} type;
   enum class Option {F0, F1} option;
@@ -92,121 +179,44 @@ public:
 
 };
 
-/* 
-Decl          ::= ConstDecl;
-ConstDecl     ::= "const" BType ConstDefList  ";";
-ConstDefList  ::= ConstDefList "," ConstDef | ConstDef ;
-BType         ::= "int";
-ConstDef      ::= IDENT "=" ConstInitVal;
-ConstInitVal  ::= ConstExp;
-
-Block         ::= "{" BlockItemList "}";
-BlockItemList ::= BlockItemList BlockItem | ε;
-BlockItem     ::= Decl | Stmt;
-
-LVal          ::= IDENT;
-PrimaryExp    ::= "(" Exp ")" | LVal | Number;
-
-ConstExp      ::= Exp;
- */
-
-/* for(auto &item : _block_item_list) {
-      block_item_list.push_back(std::make_pair(item.first, std::move(item.second)));
-    } */
-
-class LValAST : public BaseAST { // LVal          ::= IDENT {"[" Exp "]"};
+class FuncRParamsAST : public BaseAST { // FuncRParams   ::= Exp {"," Exp};
 public:
-
-  std::string ident;
   List exp_list;
-
-  LValAST(std::string &_ident, List &_exp_list) {
-    ident = _ident;
-    for (auto &exp : _exp_list) {
-      exp_list.push_back(std::make_pair(exp.first, std::move(exp.second)));
+  FuncRParamsAST(List &_exp_list) {
+    for(auto &item : _exp_list) {
+      exp_list.push_back(std::make_pair(item.first, std::move(item.second)));
     }
   }
-
   void Dump() const override {
-    std::cout << "LValAST { " << ident;
-    for (auto &exp : exp_list) {
-      std::cout << "[";
-      exp.second->Dump();
-      std::cout << "]";
+    std::cout << "FuncRParamsAST { ";
+    for(auto &item : exp_list) {
+      item.second->Dump();
     }
     std::cout << " }";
   }
 
-  void toDot(std::string& dot) const override  { // LVal          ::= IDENT {"[" Exp "]"}; 需要显示扩号，并单独设为一个field, 就像LValAST那样
+  void toDot(std::string& dot) const override {// FuncRParams   ::= Exp {"," Exp};
     std::string node_id = getUniqueID();
-    std::string node_def = node_id + "[label=\"<f0> IDENT: " + ident;
+    std::string node_def = node_id + "[label=\"";
     for(int i = 0; i < exp_list.size(); i++) {
-      node_def += " | <f" + std::to_string(i*3 + 1) + "> \\[" + " | <f" + std::to_string(i*3 + 2) + "> Exp | <f" + std::to_string(i*3 + 3) + "> \\]";
+      if(i == 0) {
+        node_def += "<f" + std::to_string(i*2 + 0) + "> Exp";
+      } else {
+        node_def += " | <f" + std::to_string(i*2 - 1) + "> , | <f" + std::to_string(i*2) + "> Exp";
+      }
     }
     node_def += "\"];\n";
     dot += node_def;
+
     for(int i = 0; i < exp_list.size(); i++) {
       exp_list[i].second->toDot(dot);
-      dot += "\"" + node_id + "\":f" + std::to_string(i*3 + 2) + " ->" + "\"" + exp_list[i].second->getUniqueID() + "\";\n";
-    }
+      dot += "\"" + node_id + "\":f" + std::to_string(i*2) + " ->" + "\"" + exp_list[i].second->getUniqueID() + "\";\n";
+    } 
   }
 
 };
 
-// PrimaryExpAST
-class PrimaryExpAST : public BaseAST { // PrimaryExp    ::= "(" Exp ")" | LVal | Number; 需要显示扩号，并单独设为一个field, 就像LValAST那样
-public:
-  enum class Type { EXP, NUMBER, LVAL } type;
-  std::unique_ptr<BaseAST> exp_or_lval;
-  int number;
-  PrimaryExpAST() {}
-  PrimaryExpAST(int _number) {
-    type = Type::NUMBER;
-    number = _number;
-  }
-
-  void Dump() const override {
-    std::cout << "PrimaryExpAST { ";
-    switch (type) {
-      case Type::EXP:
-        exp_or_lval->Dump();
-        break;
-      case Type::NUMBER:
-        std::cout << number;
-        break;
-      case Type::LVAL:
-        exp_or_lval->Dump();
-        break;
-      default:
-        break;
-    }
-    std::cout << " }";
-  }
-
-  void toDot(std::string& dot) const override  { // PrimaryExp    ::= "(" Exp ")" | LVal | Number; 需要显示扩号，并单独设为一个field, 就像LValAST那样
-    std::string node_id = getUniqueID();
-    if(type == Type::EXP) { // PrimaryExp    ::= "(" Exp ")";
-      std::string node_def = node_id + "[label=\"<f0> \\( | <f1> Exp | <f2> \\)\"];\n";
-      dot += node_def;
-      exp_or_lval->toDot(dot);
-      dot += "\"" + node_id + "\":f1 ->" + "\"" + exp_or_lval->getUniqueID() + "\";\n";
-    } else if(type == Type::NUMBER) { // PrimaryExp    ::= Number;
-      std::string node_def = node_id + "[label=\"<f0> Number: " + std::to_string(number) + "\"];\n";
-      dot += node_def;
-    } else if(type == Type::LVAL) { // PrimaryExp    ::= LVal;
-      std::string node_def = node_id + "[label=\"<f0> LVal\"];\n";
-      dot += node_def;
-      exp_or_lval->toDot(dot);
-      dot += "\"" + node_id + "\":f0 ->" + "\"" + exp_or_lval->getUniqueID() + "\";\n";
-    } else {
-      std::cerr << "PrimaryExpAST::toDot: unknown type" << std::endl;
-    }
-  
-  }
-
-};
-
-class MulExpAST : public BaseAST { // MulExp        ::= UnaryExp | MulExp ("*" | "/" | "%") UnaryExp; 需要显示扩号，并单独设为一个field, 就像LValAST那样
+class MulExpAST : public BaseAST { // MulExp        ::= UnaryExp | MulExp ("*" | "/" | "%") UnaryExp; 
 public:
   enum class Type { UNARYEXP, MULEXP} type;
   std::unique_ptr<BaseAST> unary_exp;
@@ -488,7 +498,7 @@ public:
   }
 };
 
-class LOrExpAST : public BaseAST {
+class LOrExpAST : public BaseAST { // LOrExp        ::= LAndExp | LOrExp "||" LAndExp;
 public:
   enum class Type {LANDEXP, LOREXP} type;
   std::unique_ptr<BaseAST> land_exp;
@@ -541,4 +551,23 @@ public:
       std::cerr << "LOrExpAST::toDot: unknown type" << std::endl;
     }
   }
+};
+
+class ConstExpAST : public BaseAST { // ConstExp      ::= Exp;
+public:
+    std::unique_ptr<BaseAST> exp;
+    ConstExpAST(std::unique_ptr<BaseAST> &_exp) : exp(std::move(_exp)) {}
+    void Dump() const override {
+        std::cout << "ConstExpAST { ";
+        exp->Dump();
+        std::cout << " }";
+    }
+
+    void toDot(std::string& dot) const override {
+        std::string node_id = getUniqueID();
+        std::string node_def = node_id + "[label=\"<f0> Exp\"];\n";
+        dot += node_def;
+        exp->toDot(dot);
+        dot += "\"" + node_id + "\":f0 ->" + "\"" + exp->getUniqueID() + "\";\n";
+    }
 };

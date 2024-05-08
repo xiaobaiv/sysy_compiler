@@ -3,8 +3,8 @@
 #include <iostream>
 #include <memory>
 #include <vector>
-enum class ListType { CONSTDEF,VARDEF ,DECL, STMT, BLOCKITEM, FUNCFPARAM, EXP, CONSTEXP, INITVAL, CONSTINITVAL };
 
+enum class ListType { CONSTDEF,VARDEF ,DECL, STMT, BLOCKITEM, FUNCFPARAM, EXP, CONSTEXP, INITVAL, CONSTINITVAL };
 // 所有 AST 的基类
 class BaseAST {
  public:
@@ -19,6 +19,5 @@ class BaseAST {
         return "Node_" + std::to_string(reinterpret_cast<std::uintptr_t>(this));
     }
 };
-
 
 typedef std::vector<std::pair<ListType, std::unique_ptr<BaseAST>>> List;

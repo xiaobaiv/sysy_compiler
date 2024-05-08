@@ -35,9 +35,9 @@ int main(int argc, const char *argv[]) {
   assert(!ret);
 
   // 输出解析得到的 AST, 其实就是个字符串
-  cout << endl;
-  ast->Dump();
-  cout << endl << endl;
+  //cout << endl;
+  //ast->Dump();
+  //cout << endl << endl;
 
   // .dot
   string dot = "digraph G {\n";
@@ -47,7 +47,7 @@ int main(int argc, const char *argv[]) {
   dot += "\"node0\":f0 ->\"" + ast->getUniqueID() + "\";\n";
   ast->toDot(dot);
   dot += "}\n";
-  cout << dot << endl;
+  //cout << dot << endl;
 
   // 创建或覆盖 Tree.dot 文件
     string dotFilePath = "./plot/Tree.dot";
