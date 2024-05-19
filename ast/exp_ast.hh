@@ -374,7 +374,7 @@ public:
       add_exp->toDot(dot);
       dot += "\"" + node_id + "\":f0 ->" + "\"" + add_exp->getUniqueID() + "\";\n";
     } else if(type == Type::RELEXP) { // RelExp        ::= RelExp ("<" | ">" | "<=" | ">=") AddExp;
-      std::string node_def = node_id + "[label=\"<f0> RelExp | <f1> " + op + " | <f2> AddExp\"];\n";
+      std::string node_def = node_id + "[label=\"<f0> RelExp | <f1> \\" + op + " | <f2> AddExp\"];\n";
       dot += node_def;
       rel_exp->toDot(dot);
       dot += "\"" + node_id + "\":f0 ->" + "\"" + rel_exp->getUniqueID() + "\";\n";

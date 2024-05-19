@@ -13,13 +13,18 @@
 
 using namespace std;
 
+// line number
+// int yylineno = 1;
+// position in line
+int yycolno = 1;
+
 %}
 
 /* 空白符和注释 */
-WhiteSpace    [ \t\n\r]*
+WhiteSpace    [ \t]*
 LineComment   "//".*
 BlockComment   \/\*([^*]|(\*+[^*/]))*\*+\/
-
+NewLine       \n|\r\n|\r
 
 /* 标识符 */
 Identifier    [a-zA-Z_][a-zA-Z0-9_]*
@@ -39,34 +44,36 @@ LAndOp         &&
 LOrOp          \|\|
 %%
 
-{WhiteSpace}    { /* 忽略, 不做任何操作 */ }
-{LineComment}   { /* 忽略, 不做任何操作 */ }
-{BlockComment}  { /* 忽略, 不做任何操作 */ }
+{WhiteSpace}    { yycolno += yyleng; }
+{LineComment}   { yycolno += yyleng; }
+{BlockComment}  { int i = 0; for(i = 0; i < strlen(yytext); i++) {if(yytext[i] == '\n' || yytext[i] == '\r') yylineno++; yycolno = 1;} }
+{NewLine}       { yylineno++; yycolno = 1; }
 
-"int"           { return INT; }
-"void"          { return VOID; }
-"return"        { return RETURN; }
-"const"         { return CONST; }
-"if"            { return IF; }
-"else"          { return ELSE; }
-"while"         { return WHILE; }
-"break"         { return BREAK; }
-"continue"      { return CONTINUE; }
+"int"           { yycolno += yyleng; return INT; }
+"void"          { yycolno += yyleng; return VOID; }
+"return"        { yycolno += yyleng; return RETURN; }
+"const"         { yycolno += yyleng; return CONST; }
+"if"            { yycolno += yyleng; return IF; }
+"else"          { yycolno += yyleng; return ELSE; }
+"while"         { yycolno += yyleng; return WHILE; }
+"break"         { yycolno += yyleng; return BREAK; }
+"continue"      { yycolno += yyleng; return CONTINUE; }
 
-{Identifier}    { yylval.str_val = new string(yytext); return IDENT; }
 
-{Decimal}       { yylval.int_val = strtol(yytext, nullptr, 0); return INT_CONST; }
-{Octal}         { yylval.int_val = strtol(yytext, nullptr, 0); return INT_CONST; }
-{Hexadecimal}   { yylval.int_val = strtol(yytext, nullptr, 0); return INT_CONST; }
+{Identifier}    { yylval.str_val = new string(yytext); yycolno += yyleng; return IDENT; }
 
-{UnaryOp}       { yylval.str_val = new string(yytext); return UNARYOP; }
-{AddOp}         { yylval.str_val = new string(yytext); return ADDOP; }
-{MulOp}         { yylval.str_val = new string(yytext); return MULOP; }
-{RelOp}         { yylval.str_val = new string(yytext); return RELOP; }
-{EqOp}          { yylval.str_val = new string(yytext); return EQOP; }
-{LAndOp}        { yylval.str_val = new string(yytext); return LANDOP; }
-{LOrOp}         { yylval.str_val = new string(yytext); return LOROP; }
+{Decimal}       { yylval.int_val = strtol(yytext, nullptr, 0); yycolno += yyleng; return INT_CONST; }
+{Octal}         { yylval.int_val = strtol(yytext, nullptr, 0); yycolno += yyleng; return INT_CONST; }
+{Hexadecimal}   { yylval.int_val = strtol(yytext, nullptr, 0); yycolno += yyleng; return INT_CONST; }
 
-.               { return yytext[0]; }
+{UnaryOp}       { yylval.str_val = new string(yytext); yycolno += yyleng; return UNARYOP; }
+{AddOp}         { yylval.str_val = new string(yytext); yycolno += yyleng; return ADDOP; }
+{MulOp}         { yylval.str_val = new string(yytext); yycolno += yyleng; return MULOP; }
+{RelOp}         { yylval.str_val = new string(yytext); yycolno += yyleng; return RELOP; }
+{EqOp}          { yylval.str_val = new string(yytext); yycolno += yyleng; return EQOP; }
+{LAndOp}        { yylval.str_val = new string(yytext); yycolno += yyleng; return LANDOP; }
+{LOrOp}         { yylval.str_val = new string(yytext); yycolno += yyleng; return LOROP; }
+
+.               { yycolno += yyleng; return yytext[0]; }
 
 %%

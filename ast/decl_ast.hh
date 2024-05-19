@@ -68,12 +68,12 @@ public:
       if(i == 0) {
         node_def += " | <f" + std::to_string(i*2 + 2) + "> ConstDef";
       } else {
-        node_def += " | <f" + std::to_string(i*2 - 1) + "> , | <f" + std::to_string(i*2) + "> ConstDef";
+        node_def += " | <f" + std::to_string(i*2 + 1) + "> , | <f" + std::to_string(i*2+2) + "> ConstDef";
       }
     }
     node_def += " | <f" + std::to_string(const_def_list.size()*2 + 1) + "> ;\"];\n";
     dot += node_def;
-
+    // std::cout << node_def<<std::endl;
     btype->toDot(dot);
     dot += "\"" + node_id + "\":f1 ->" + "\"" + btype->getUniqueID() + "\";\n";
 

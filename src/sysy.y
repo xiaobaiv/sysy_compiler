@@ -1,3 +1,4 @@
+
 %code requires {
   #include <memory>
   #include <string>
@@ -53,6 +54,10 @@ stack<List> global_stack;
 
 %glr-parser
 
+
+
+%nonassoc LOWER_THAN_ELSE
+%nonassoc ELSE
 %%
 
 // 优化后的 CompUnit, 使用ast作为暂时存储右侧的CompUnit的缓存
@@ -86,6 +91,9 @@ stack<List> global_stack;
     comp_unit->option = CompUnitAST::Option::C0;
     comp_unit->func_def_or_decl = unique_ptr<BaseAST>($1);
     ast = move(comp_unit);
+  }
+  | error {
+    yyerror(ast, "CompUnit");
   }
   ;  
 
@@ -271,7 +279,7 @@ Stmt
     ast->option = StmtAST::Option::EXP0;
     $$ = ast;
   }
-  | IF '(' Exp ')' Stmt {
+  | IF '(' Exp ')' Stmt %prec LOWER_THAN_ELSE{
     auto ast = new StmtAST();
     ast->type = StmtAST::Type::IF;
     ast->exp = unique_ptr<BaseAST>($3);
@@ -630,13 +638,20 @@ void yyerror(std::unique_ptr<BaseAST> &ast, const char *s) {
   
     extern int yylineno;    // defined and maintained in lex
     extern char *yytext;    // defined and maintained in lex
-    int len=strlen(yytext);
-    int i;
-    char buf[512]={0};
-    for (i=0;i<len;++i)
-    {
-        sprintf(buf,"%s%d ",buf,yytext[i]);
-    }
-    fprintf(stderr, "ERROR: %s at symbol '%s' on line %d\n", s, buf, yylineno);
+    extern int yycolno;     // defined and maintained in lex
+
+    // ANSI颜色代码
+    const std::string RED = "\033[31m";     // 设置颜色为红色
+    const std::string GREEN = "\033[32m";   // 设置颜色为绿色
+    const std::string RESET = "\033[0m";    // 重置颜色
+
+    //fprintf(stderr, "ERROR: %s at symbol '%s' on line %d on col %d \n", s, yytext, yylineno1, yycolno);
+    std::cout << RED << "error: " << RESET << "at symbol " << RED << "'" << yytext << "'" << RESET
+              << " on line " << RED << yylineno << ":" << yycolno << RESET << std::endl;
 
 }
+
+/* void yyerror(YYLTYPE *loc, const char *s) {
+    cout << "ERROR: " << s << " at line " << loc->first_line << " on col " << loc->first_column << endl;
+}
+ */
