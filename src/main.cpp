@@ -6,7 +6,9 @@
 #include <fstream>
 #include <cstdlib>
 #include <cassert>
+#include "koopa.h"
 #include "/root/compiler/sysy-make-template/ast/ast.hh"
+#include "ir2riscv.hh"
 using namespace std;
 
 // 声明 lexer 的输入, 以及 parser 函数
@@ -17,28 +19,7 @@ using namespace std;
 extern FILE *yyin;
 extern int yyparse(unique_ptr<BaseAST> &ast);
 
-int main(int argc, const char *argv[]) {
-  // 解析命令行参数. 测试脚本/评测平台要求你的编译器能接收如下参数:
-  // compiler 模式 输入文件 -o 输出文件
-  assert(argc == 5);
-  auto mode = argv[1];
-  auto input = argv[2];
-  auto output = argv[4];
-
-  // 打开输入文件, 并且指定 lexer 在解析的时候读取这个文件
-  yyin = fopen(input, "r");
-  assert(yyin);
-
-  // 调用 parser 函数, parser 函数会进一步调用 lexer 解析输入文件的
-  unique_ptr<BaseAST> ast;
-  auto ret = yyparse(ast);
-  assert(!ret);
-
-  // 输出解析得到的 AST, 其实就是个字符串
-  //cout << endl;
-  //ast->Dump();
-  //cout << endl << endl;
-
+int genDot(unique_ptr<BaseAST> &ast) {
   // .dot
   string dot = "digraph G {\n";
   dot += "node [shape = record,height=.1]\n";
@@ -68,7 +49,77 @@ int main(int argc, const char *argv[]) {
         return -1;
     }
 
-    cout << "AST 已经被成功输出到 /plot/Tree.png" << endl;
+    cout << "AST 已经被成功输出到 /plot/Tree.png" << endl; 
+    return 0;
+}
 
-  return 0;
+int main(int argc, char *argv[]) {
+    if (argc < 4) {
+        cerr << "Usage: " << argv[0] << " [-dot] mode input_file -o output_file" << endl;
+        return -1;
+    }
+
+    bool generateDot = false;
+    string mode, input, output;
+    for (int i = 1; i < argc; i++) {
+        string arg = argv[i];
+        if (arg == "-dot") {
+            generateDot = true;
+        } else if (arg == "-o") {
+            if (i + 1 < argc) {
+                output = argv[++i];
+            }
+        } else if (mode.empty()) {
+            mode = arg;
+        } else if (input.empty()) {
+            input = arg;
+        }
+    }
+
+    if (input.empty() || output.empty()) {
+        cerr << "Invalid command line. Make sure to include mode, input file, and output file." << endl;
+        return -1;
+    }
+
+    yyin = fopen(input.c_str(), "r");
+    if (!yyin) {
+        cerr << "Cannot open input file: " << input << endl;
+        return -1;
+    }
+
+    unique_ptr<BaseAST> ast;
+    if (yyparse(ast) != 0) {
+        cerr << "Failed to parse input file." << endl;
+        return -1;
+    }
+
+    if (generateDot) {
+        genDot(ast); // Only call if -dot is specified
+    }
+
+    string ir;
+    ast->toIR(ir);
+
+    if (mode == "-koopa") {
+        ofstream irFile(output, ios::out | ios::trunc);
+        if (irFile.is_open()) {
+            irFile << ir;
+            irFile.close();
+        } else {
+            cerr << "Cannot open output file: " << output << endl;
+            return -1;
+        }
+    } else if (mode == "-riscv" || mode == "-perf") {
+        string riscv = ir2riscv(ir);
+        ofstream riscvFile(output, ios::out | ios::trunc);
+        if (riscvFile.is_open()) {
+            riscvFile << riscv;
+            riscvFile.close();
+        } else {
+            cerr << "Cannot open output file: " << output << endl;
+            return -1;
+        }
+    }
+
+    return 0;
 }
