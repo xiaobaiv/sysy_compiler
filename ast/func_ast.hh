@@ -8,6 +8,37 @@ class FuncDefAST : public BaseAST { // FuncDef       ::= FuncType IDENT "(" [Fun
   std::unique_ptr<BaseAST> func_fparams;
   std::unique_ptr<BaseAST> block;
 
+/* ir 语法
+FunDef ::= "fun" SYMBOL "(" [FunParams] ")" [":" Type] "{" FunBody "}";
+FunParams ::= SYMBOL ":" Type {"," SYMBOL ":" Type};
+FunBody ::= {Block};
+Block ::= SYMBOL ":" {Statement} EndStatement;
+Statement ::= SymbolDef | Store | FunCall;
+EndStatement ::= Branch | Jump | Return;
+ */
+
+  // 生成ir 的函数 toIR, 结果存在 字符串 ir 中，遵循ir 语法
+  ret_value_t toIR(std::string& ir) override {
+    if (option == Option::F0) { // FuncDef       ::= FuncType IDENT "(" ")" Block; 遵循ir语法，生成ir语言FunDef ::= "fun" SYMBOL "(" [FunParams] ")" [":" Type] "{" FunBody "}";
+      ir += "fun @" + ident + "()";
+      func_type->toIR(ir);
+      ir += " {\n";
+      block->toIR(ir);
+      ir += "}\n";
+    } else if (option == Option::F1) { // FuncDef       ::= FuncType IDENT "(" FuncFParams ")" Block; 遵循ir语法，生成ir语言FunDef ::= "fun" SYMBOL "(" FunParams ")" [":" Type] "{" FunBody "}";
+      ir += "fun @" + ident + "(";
+      func_fparams->toIR(ir);
+      ir += ")";
+      func_type->toIR(ir);
+      ir += " {\n";
+      block->toIR(ir);
+      ir += "}\n";
+    } else {
+      std::cerr << "FuncDefAST::toIR: unknown option" << std::endl;
+    } 
+    return {0, RetType::VOID};
+  }
+
   void Dump() const override {
     std::cout << "FuncDefAST { ";
     func_type->Dump();
@@ -47,6 +78,16 @@ class FuncTypeAST : public BaseAST { // FuncType      ::= "void" | "int";
 public:
   std::string type;
  
+  ret_value_t toIR(std::string& ir) override {
+    if(type == "int") {
+      ir += ": i32";
+    } else if(type == "void") {
+      ir += "";
+    } else {
+      std::cerr << "FuncTypeAST::toIR: unknown type" << std::endl;
+    }
+    return {0, RetType::VOID};
+  }
   void Dump() const override {
     std::cout << "FuncTypeAST { ";
     std::cout << type <<" }";
@@ -68,6 +109,9 @@ public:
       fparams_list.push_back(std::make_pair(item.first, std::move(item.second)));
     }
   }
+
+
+
   void Dump() const override {
     std::cout << "FuncFParamsAST { ";
     for(auto &item : fparams_list) {
@@ -151,6 +195,16 @@ public:
       block_item_list.push_back(std::make_pair(item.first, std::move(item.second)));
     }
   }
+
+  ret_value_t toIR(std::string& ir) override { // %entry:
+    ir += "%entry:\n";
+    for(auto &item : block_item_list) {
+      item.second->toIR(ir);
+    }
+    return {0, RetType::VOID};
+  }
+
+
   void Dump() const override {
     std::cout << "BlockAST { ";
     for(auto &item : block_item_list) {
@@ -188,6 +242,18 @@ public:
   enum class Type { DECL, STMT } type;
   
   BlockItemAST(std::unique_ptr<BaseAST> &_decl_or_stmt, Type _type) : decl_or_stmt(std::move(_decl_or_stmt)), type(_type) {}
+  
+  ret_value_t toIR(std::string& ir) override {
+    if(type == Type::DECL) { // BlockItem     ::= Decl;
+      decl_or_stmt->toIR(ir);
+    } else if(type == Type::STMT) { // BlockItem     ::= Stmt;
+      decl_or_stmt->toIR(ir);
+    } else {
+      std::cerr << "BlockItemAST::toIR: unknown type" << std::endl;
+    }
+    return {0, RetType::VOID};
+  }
+
   void Dump() const override {
     std::cout << "BlockItemAST { ";
     switch (type) {
@@ -232,6 +298,29 @@ public:
     type = Type::ASSIGN;
   }
   StmtAST() {}
+
+  ret_value_t toIR(std::string& ir) override {
+    if (type == Type::RETURN) {
+      if(option == Option::EXP0) { // Stmt          ::= "return" ";";
+        ir += "\tret\n";
+      } else if (option == Option::EXP1) { // Stmt          ::= "return" Exp ";";
+        ret_value_t ret = exp->toIR(ir);
+        if(ret.second == RetType::NUMBER) {
+          ir += "\tret " + std::to_string(ret.first) + "\n";
+        } else if (ret.second == RetType::INDEX) {
+          ir += "\tret %" + std::to_string(ret.first) + "\n";
+        } else if (ret.second == RetType::VOID) {
+          ir += "\tret\n";
+        } else {
+          std::cerr << "StmtAST::toIR: unknown return type" << std::endl;
+        } 
+      } else {
+        std::cerr << "StmtAST::toIR: unknown option" << std::endl;
+      }
+    }
+    return {0, RetType::VOID};
+  }
+
   void Dump() const override {
     std::cout << "StmtAST { ";
     switch (type) {

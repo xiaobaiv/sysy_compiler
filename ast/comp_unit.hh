@@ -8,6 +8,34 @@ class CompUnitAST : public BaseAST { // CompUnit      ::= [CompUnit] (Decl | Fun
   std::unique_ptr<BaseAST> other_comp_unit;
   std::unique_ptr<BaseAST> func_def_or_decl;
 
+  ret_value_t toIR(std::string &ir) override {
+    switch (type) {
+      case Type::FUNCDEF:
+        if(option == Option::C0) {
+          return func_def_or_decl->toIR(ir);
+        } else if(option == Option::C1) {
+          other_comp_unit->toIR(ir);
+          return func_def_or_decl->toIR(ir);
+        } else {
+          std::cerr << "CompUnitAST::toIR: unknown option" << std::endl;
+          return ret_value_t(0, RetType::NUMBER);
+        }
+      case Type::DECL:
+        if(option == Option::C0) {
+          return func_def_or_decl->toIR(ir);
+        } else if(option == Option::C1) {
+          other_comp_unit->toIR(ir);
+          return func_def_or_decl->toIR(ir);
+        } else {
+          std::cerr << "CompUnitAST::toIR: unknown option" << std::endl;
+          return ret_value_t(0, RetType::NUMBER);
+        }
+      default:
+        std::cerr << "CompUnitAST::toIR: unknown type" << std::endl;
+        return ret_value_t(0, RetType::NUMBER);
+    }
+  }
+
   void Dump() const override {
     std::cout << "CompUnitAST { ";
     switch (type) {

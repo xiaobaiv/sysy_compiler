@@ -7,7 +7,6 @@ class DeclAST : public BaseAST { // Decl          ::= ConstDecl | VarDecl;
     enum class Type { CONST, VAR } type;
 
     DeclAST(std::unique_ptr<BaseAST> &_const_or_var_decl, Type _type) : const_or_var_decl(std::move(_const_or_var_decl)), type(_type) {}
-
     void Dump() const override {
         std::cout << "DeclAST { ";
         switch (type) {

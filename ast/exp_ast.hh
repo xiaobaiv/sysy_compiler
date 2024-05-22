@@ -4,6 +4,10 @@ class ExpAST : public BaseAST { // Exp           ::= LOrExp;
 public:
   std::unique_ptr<BaseAST> lor_exp;
 
+  ret_value_t toIR(std::string &ir) override {
+    return lor_exp->toIR(ir);
+  }
+
   void Dump() const override {
     std::cout << "ExpAST { ";
     lor_exp->Dump();
@@ -67,6 +71,20 @@ public:
     number = _number;
   }
 
+  ret_value_t toIR(std::string &ir) override {
+    if(type == Type::EXP) {
+      return exp_or_lval->toIR(ir);
+    } else if(type == Type::NUMBER) {
+      return {number, RetType::NUMBER};
+    } else if(type == Type::LVAL) {
+      std::cerr << "PrimaryExpAST::toIR: LVal" << std::endl;
+      assert(0);
+    } else {
+      std::cerr << "PrimaryExpAST::toIR: unknown type" << std::endl;
+    }
+    return {1, RetType::VOID};
+  } // PrimaryExp    ::= "(" Exp ")" | LVal | Number;  Exp ::= LOrExp; LOrExp ::= LAndExp | LOrExp "||" LAndExp; LAndExp ::= EqExp | LAndExp "&&" EqExp; EqExp ::= RelExp | EqExp ("==" | "!=") RelExp; RelExp ::= AddExp | RelExp ("<" | ">" | "<=" | ">=") AddExp; AddExp ::= MulExp | AddExp ("+" | "-") MulExp; MulExp ::= UnaryExp | MulExp ("*" | "/" | "%") UnaryExp; UnaryExp ::= PrimaryExp | IDENT "(" [FuncRParams] ")" | UnaryOp UnaryExp; UnaryOp ::= "+" | "-" | "!";
+
   void Dump() const override {
     std::cout << "PrimaryExpAST { ";
     switch (type) {
@@ -127,6 +145,34 @@ public:
     son_exp = std::move(_unary_exp);
   }
   UnaryExpAST() {}
+
+  ret_value_t toIR(std::string &ir) override {
+    if(type == Type::PRIMARY) {
+      return son_exp->toIR(ir);
+    } else if(type == Type::OP) {
+      if(op == "-") { // 变补 (取负数): 0 减去操作数
+        ret_value_t ret1 = son_exp->toIR(ir);
+        ir += getIR("sub", {0, RetType::NUMBER}, ret1);
+        return {global_var_index - 1, RetType::INDEX};
+      } else if(op == "!") { // 逻辑取反: 操作数和 0 比较相等
+        ret_value_t ret1 = son_exp->toIR(ir);
+        ir += getIR("eq", ret1, {0, RetType::NUMBER});
+        return {global_var_index - 1, RetType::INDEX};
+      } else if(op == "+") {
+        return son_exp->toIR(ir);
+      } else {
+        std::cerr << "UnaryExpAST::toIR: unknown op" << std::endl;
+        assert(0);
+      }
+    } else if(type == Type::IDENT) { // FunCall ::= "call" SYMBOL "(" [Value {"," Value}] ")";
+      std::cerr << "UnaryExpAST::toIR: IDENT" << std::endl;
+      assert(0);
+    } else {
+      std::cerr << "UnaryExpAST::toIR: unknown type" << std::endl;
+      assert(0);
+    }
+  }
+
   void Dump() const override {
     std::cout << "UnaryExpAST { ";
     switch (type) {
@@ -187,6 +233,9 @@ public:
       exp_list.push_back(std::make_pair(item.first, std::move(item.second)));
     }
   }
+
+
+
   void Dump() const override {
     std::cout << "FuncRParamsAST { ";
     for(auto &item : exp_list) {
@@ -232,6 +281,28 @@ public:
     mul_exp = std::move(_mul_exp);
     op = _op;
     unary_exp = std::move(_unary_exp);
+  }
+
+  ret_value_t toIR(std::string &ir) override {
+    if(type == Type::UNARYEXP) {
+      return unary_exp->toIR(ir);
+    } else {
+      ret_value_t i1 = mul_exp->toIR(ir);
+      ret_value_t i2 = unary_exp->toIR(ir);
+      if(op == "*") {
+        ir += getIR("mul", i1, i2);
+        return {global_var_index - 1, RetType::INDEX};
+      } else if(op == "/") {
+        ir += getIR("div", i1, i2);
+        return {global_var_index - 1, RetType::INDEX};
+      } else if(op == "%") {
+        ir += getIR("mod", i1, i2);
+        return {global_var_index - 1, RetType::INDEX};
+      } else {
+        std::cerr << "MulExpAST::toIR: unknown op" << std::endl;
+        return {1, RetType::VOID};
+      }
+    }
   }
 
   void Dump() const override {
@@ -292,6 +363,25 @@ public:
     mul_exp = std::move(_mul_exp);
   }
 
+  ret_value_t toIR(std::string &ir) override {
+    if(type == Type::MULEXP) {
+      return mul_exp->toIR(ir);
+    } else {
+      ret_value_t i1 = add_exp->toIR(ir);
+      ret_value_t i2 = mul_exp->toIR(ir);
+      if(op == "+") {
+        ir += getIR("add", i1, i2);
+        return {global_var_index - 1, RetType::INDEX};
+      } else if(op == "-") {
+        ir += getIR("sub", i1, i2);
+        return {global_var_index - 1, RetType::INDEX};
+      } else {
+        std::cerr << "AddExpAST::toIR: unknown op" << std::endl;
+        return {1, RetType::VOID};
+      }
+    }
+  }
+
   void Dump() const override {
     std::cout << "AddExpAST { ";
     switch (type)
@@ -347,6 +437,31 @@ public:
     rel_exp = std::move(_rel_exp);
     op = _op;
     add_exp = std::move(_add_exp);
+  }
+
+  ret_value_t toIR(std::string &ir) override {
+    if(type == Type::ADDEXP) {
+      return add_exp->toIR(ir);
+    } else {
+      ret_value_t i1 = rel_exp->toIR(ir);
+      ret_value_t i2 = add_exp->toIR(ir);
+      if(op == "<") {
+        ir += getIR("lt", i1, i2);
+        return {global_var_index - 1, RetType::INDEX};
+      } else if(op == ">") {
+        ir += getIR("gt", i1, i2);
+        return {global_var_index - 1, RetType::INDEX};
+      } else if(op == "<=") {
+        ir += getIR("le", i1, i2);
+        return {global_var_index - 1, RetType::INDEX};
+      } else if(op == ">=") {
+        ir += getIR("ge", i1, i2);
+        return {global_var_index - 1, RetType::INDEX};
+      } else {
+        std::cerr << "RelExpAST::toIR: unknown op" << std::endl;
+        return {1, RetType::VOID};
+      }
+    }
   }
 
   void Dump() const override {
@@ -405,6 +520,22 @@ public:
     rel_exp = std::move(_rel_exp);
   }
 
+  ret_value_t toIR(std::string &ir) override {
+    if(type == Type::RELEXP) {
+      return rel_exp->toIR(ir);
+    } else {
+      ret_value_t i1 = eq_exp->toIR(ir);
+      ret_value_t i2 = rel_exp->toIR(ir);
+      if(op == "==") {
+        ir += getIR("eq", i1, i2);
+        return {global_var_index - 1, RetType::INDEX};
+      } else {
+        ir += getIR("ne", i1, i2);
+        return {global_var_index - 1, RetType::INDEX};
+      }
+    }
+  }
+
   void Dump() const override {
     std::cout << "EqExpAST { ";
     switch (type)
@@ -449,6 +580,21 @@ public:
   std::unique_ptr<BaseAST> eq_exp;
   std::unique_ptr<BaseAST> land_exp;
   std::string op;
+
+  ret_value_t toIR(std::string &ir) override {
+    if(type == Type::EQEXP) {
+      return eq_exp->toIR(ir);
+    } else {
+      ret_value_t i1 = land_exp->toIR(ir);
+      ret_value_t i2 = eq_exp->toIR(ir);
+      // koopa IR 不支持 两个数直接与，需要判断两个数是否都不为0，然后按位与
+      // ir += getIR("and", i1, i2);
+      ir += getIR("ne", i1, {0, RetType::NUMBER});
+      ir += getIR("ne", i2, {0, RetType::NUMBER});
+      ir += getIR("and", {global_var_index - 2, RetType::INDEX}, {global_var_index - 1, RetType::INDEX});
+      return {global_var_index - 1, RetType::INDEX};
+    }
+  }
 
   LAndExpAST(std::unique_ptr<BaseAST> &_eq_exp) {
     type = Type::EQEXP;
@@ -514,6 +660,24 @@ public:
     lor_exp = std::move(_lor_exp);
     op = _op;
     land_exp = std::move(_land_exp);
+  }
+
+  ret_value_t toIR(std::string &ir) override {
+    if (type == Type::LANDEXP) {
+      return land_exp->toIR(ir);
+    } else if (type == Type::LOREXP) {
+      ret_value_t i1 = lor_exp->toIR(ir);
+      ret_value_t i2 = land_exp->toIR(ir);
+      // koopa IR 不支持 两个数直接或，需要按位或，然后与0比较，得到结果
+      // ir += getIR("or", i1, i2); 错误的
+      ir += getIR("or", i1, i2);
+      ir += getIR("ne", {global_var_index - 1, RetType::INDEX}, {0, RetType::NUMBER});
+      return {global_var_index - 1, RetType::INDEX};
+    } else {
+      std::cerr << "LOrExpAST::toIR: unknown type" << std::endl;
+      assert(0);
+    }
+    return {1, RetType::VOID};
   }
 
   void Dump() const override {
