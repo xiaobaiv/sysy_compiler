@@ -2,7 +2,6 @@
 # Modified by MaxXing
 
 # Settings
-# Set to 0 to enable C mode
 CPP_MODE := 1
 ifeq ($(CPP_MODE), 0)
 FB_EXT := .c
@@ -37,6 +36,7 @@ BISON := bison
 TOP_DIR := $(shell pwd)
 TARGET_EXEC := compiler
 SRC_DIR := $(TOP_DIR)/src
+AST_DIR := $(TOP_DIR)/ast
 BUILD_DIR ?= $(TOP_DIR)/build
 LIB_DIR ?= $(CDE_LIBRARY_PATH)/native
 INC_DIR ?= $(CDE_INCLUDE_PATH)
@@ -47,21 +47,22 @@ LDFLAGS += -L$(LIB_DIR) -lkoopa
 # Source files & target files
 FB_SRCS := $(patsubst $(SRC_DIR)/%.l, $(BUILD_DIR)/%.lex$(FB_EXT), $(shell find $(SRC_DIR) -name "*.l"))
 FB_SRCS += $(patsubst $(SRC_DIR)/%.y, $(BUILD_DIR)/%.tab$(FB_EXT), $(shell find $(SRC_DIR) -name "*.y"))
-SRCS := $(FB_SRCS) $(shell find $(SRC_DIR) -name "*.c" -or -name "*.cpp" -or -name "*.cc")
+SRCS := $(FB_SRCS) $(shell find $(SRC_DIR) -name "*.c" -or -name "*.cpp" -or -name "*.cc") $(shell find $(AST_DIR) -name "*.cpp")
 OBJS := $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.c.o, $(SRCS))
 OBJS := $(patsubst $(SRC_DIR)/%.cpp, $(BUILD_DIR)/%.cpp.o, $(OBJS))
 OBJS := $(patsubst $(SRC_DIR)/%.cc, $(BUILD_DIR)/%.cc.o, $(OBJS))
 OBJS := $(patsubst $(BUILD_DIR)/%.c, $(BUILD_DIR)/%.c.o, $(OBJS))
 OBJS := $(patsubst $(BUILD_DIR)/%.cpp, $(BUILD_DIR)/%.cpp.o, $(OBJS))
 OBJS := $(patsubst $(BUILD_DIR)/%.cc, $(BUILD_DIR)/%.cc.o, $(OBJS))
+OBJS := $(patsubst $(AST_DIR)/%.cpp, $(BUILD_DIR)/%.cpp.o, $(OBJS))
 
 # Header directories & dependencies
 INC_DIRS := $(shell find $(SRC_DIR) -type d)
+INC_DIRS += $(shell find $(AST_DIR) -type d)
 INC_DIRS += $(INC_DIRS:$(SRC_DIR)%=$(BUILD_DIR)%)
 INC_FLAGS := $(addprefix -I, $(INC_DIRS))
 DEPS := $(OBJS:.o=.d)
 CPPFLAGS = $(INC_FLAGS) -MMD -MP
-
 
 # Main target
 $(BUILD_DIR)/$(TARGET_EXEC): $(FB_SRCS) $(OBJS)
@@ -82,7 +83,11 @@ define cxx_recipe
 endef
 $(BUILD_DIR)/%.cpp.o: $(SRC_DIR)/%.cpp; $(cxx_recipe)
 $(BUILD_DIR)/%.cpp.o: $(BUILD_DIR)/%.cpp; $(cxx_recipe)
+$(BUILD_DIR)/%.cpp.o: $(AST_DIR)/%.cpp; $(cxx_recipe)
 $(BUILD_DIR)/%.cc.o: $(SRC_DIR)/%.cc; $(cxx_recipe)
+
+$(info SRCS: $(SRCS))
+$(info OBJS: $(OBJS))
 
 # Flex
 $(BUILD_DIR)/%.lex$(FB_EXT): $(SRC_DIR)/%.l
@@ -93,7 +98,6 @@ $(BUILD_DIR)/%.lex$(FB_EXT): $(SRC_DIR)/%.l
 $(BUILD_DIR)/%.tab$(FB_EXT): $(SRC_DIR)/%.y
 	mkdir -p $(dir $@)
 	$(BISON) $(BFLAGS) -o $@ $<
-
 
 .PHONY: clean
 
