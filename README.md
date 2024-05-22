@@ -38,5 +38,6 @@ int main() {
 }
 ```
 ## 输出结果
-![Alt text](plot/Tree.png)
+参考/plot/Tree.png
+
 
