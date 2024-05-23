@@ -306,17 +306,24 @@ public:
       } else if (option == Option::EXP1) { // Stmt          ::= "return" Exp ";";
         ret_value_t ret = exp->toIR(ir);
         if(ret.second == RetType::NUMBER) {
-          ir += "\tret " + std::to_string(ret.first) + "\n";
+          ir += "\tret " + std::to_string(ret.first.number) + "\n";
         } else if (ret.second == RetType::INDEX) {
-          ir += "\tret %" + std::to_string(ret.first) + "\n";
+          ir += "\tret %" + std::to_string(ret.first.number) + "\n";
         } else if (ret.second == RetType::VOID) {
           ir += "\tret\n";
+        } else if (ret.second == RetType::IDENT) {
+          ir += loadIR(ret);
+          ir += "\tret %" + std::to_string(global_var_index - 1) + "\n";
         } else {
-          std::cerr << "StmtAST::toIR: unknown return type" << std::endl;
-        } 
+          std::cerr << "StmtAST::toIR: unknown ret type" << std::endl;
+        }
       } else {
         std::cerr << "StmtAST::toIR: unknown option" << std::endl;
       }
+    } else if(type == Type::ASSIGN) {
+      ret_value_t exp_ret = exp->toIR(ir);
+      ret_value_t lval_ret = lval->toIR(ir);
+      ir += storeIR(exp_ret, lval_ret);
     }
     return {0, RetType::VOID};
   }

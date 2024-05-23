@@ -7,7 +7,9 @@ public:
   ret_value_t toIR(std::string &ir) override {
     return lor_exp->toIR(ir);
   }
-
+  int calc() override {
+    return lor_exp->calc();
+  }
   void Dump() const override {
     std::cout << "ExpAST { ";
     lor_exp->Dump();
@@ -33,7 +35,48 @@ public:
       exp_list.push_back(std::make_pair(exp.first, std::move(exp.second)));
     }
   }
+  ret_value_t toIR(std::string &ir) override {
+    // 在符号表中查找标识符， TODO,目前的符号表很简单，只有一个全局符号表，并且只有常量
+    // 符号表 static std::unordered_map<std::string, int> symbol_table;
+    if (exp_list.size() == 0) {
+      if (symbol_table.find(ident) == nullptr) {
+        std::cerr << "LValAST::toIR: undefined ident " << ident << std::endl;
+        assert(0);
+      }
+      if(symbol_table.isConst(ident)) {
+        return {symbol_table.getValue(ident), RetType::NUMBER};
+      } else { // TODO: 这里应该是变量
+        // 有调用者决定是否load
+        return {RetValue(ident), RetType::IDENT};
+      }
 
+    } else {
+      std::cerr << "LValAST::toIR: array not supported" << std::endl;
+      assert(0);
+    }
+    return {1, RetType::VOID};
+  }
+  int calc() override {
+    // 在符号表中查找标识符， TODO,目前的符号表很简单，只有一个全局符号表，并且只有常量
+    // 符号表 static std::unordered_map<std::string, int> symbol_table;
+    if (exp_list.size() == 0) {
+      if (symbol_table.find(ident) == nullptr) {
+        std::cerr << "LValAST::calc: undefined ident " << ident << std::endl;
+        assert(0);
+      }
+      if(symbol_table.isConst(ident)) {
+        return symbol_table.getValue(ident);
+      } else {
+        std::cerr << "LValAST::calc: not const" << std::endl;
+        assert(0);
+      }
+
+    } else {
+      std::cerr << "LValAST::calc: array not supported" << std::endl;
+      assert(0);
+    }
+
+  }
   void Dump() const override {
     std::cout << "LValAST { " << ident;
     for (auto &exp : exp_list) {
@@ -70,15 +113,31 @@ public:
     type = Type::NUMBER;
     number = _number;
   }
-
+  int calc() override {
+    if(type == Type::EXP) {
+      return exp_or_lval->calc();
+    } else if(type == Type::NUMBER) {
+      return number;
+    } else if(type == Type::LVAL) {
+      return exp_or_lval->calc();
+    } else {
+      std::cerr << "PrimaryExpAST::calc: unknown type" << std::endl;
+      assert(0);
+    }
+  }
   ret_value_t toIR(std::string &ir) override {
     if(type == Type::EXP) {
       return exp_or_lval->toIR(ir);
     } else if(type == Type::NUMBER) {
-      return {number, RetType::NUMBER};
+      return {RetValue{number}, RetType::NUMBER};
     } else if(type == Type::LVAL) {
-      std::cerr << "PrimaryExpAST::toIR: LVal" << std::endl;
-      assert(0);
+      ret_value_t ret = exp_or_lval->toIR(ir);
+      if(ret.second == RetType::IDENT) { // 如果返回的是标识符，说明是一个变量，在primary_exp中，我们需要load（等号右边）
+        ir += loadIR(ret);
+        ret.second = RetType::INDEX;
+        ret.first.number = global_var_index - 1;
+      }
+      return ret;
     } else {
       std::cerr << "PrimaryExpAST::toIR: unknown type" << std::endl;
     }
@@ -145,7 +204,28 @@ public:
     son_exp = std::move(_unary_exp);
   }
   UnaryExpAST() {}
-
+  int calc() override {
+    if(type == Type::PRIMARY) {
+      return son_exp->calc();
+    } else if(type == Type::OP) {
+      if(op == "-") {
+        return -son_exp->calc();
+      } else if(op == "!") {
+        return !son_exp->calc();
+      } else if(op == "+") {
+        return son_exp->calc();
+      } else {
+        std::cerr << "UnaryExpAST::calc: unknown op" << std::endl;
+        assert(0);
+      }
+    } else if(type == Type::IDENT) {
+      std::cerr << "UnaryExpAST::calc: IDENT" << std::endl;
+      assert(0);
+    } else {
+      std::cerr << "UnaryExpAST::calc: unknown type" << std::endl;
+      assert(0);
+    }
+  }
   ret_value_t toIR(std::string &ir) override {
     if(type == Type::PRIMARY) {
       return son_exp->toIR(ir);
@@ -282,7 +362,24 @@ public:
     op = _op;
     unary_exp = std::move(_unary_exp);
   }
-
+  int calc() override {
+    if(type == Type::UNARYEXP) {
+      return unary_exp->calc();
+    } else {
+      int i1 = mul_exp->calc();
+      int i2 = unary_exp->calc();
+      if(op == "*") {
+        return i1 * i2;
+      } else if(op == "/") {
+        return i1 / i2;
+      } else if(op == "%") {
+        return i1 % i2;
+      } else {
+        std::cerr << "MulExpAST::calc: unknown op" << std::endl;
+        assert(0);
+      }
+    }
+  }
   ret_value_t toIR(std::string &ir) override {
     if(type == Type::UNARYEXP) {
       return unary_exp->toIR(ir);
@@ -362,7 +459,22 @@ public:
     op = _op;
     mul_exp = std::move(_mul_exp);
   }
-
+  int calc() override {
+    if(type == Type::MULEXP) {
+      return mul_exp->calc();
+    } else {
+      int i1 = add_exp->calc();
+      int i2 = mul_exp->calc();
+      if(op == "+") {
+        return i1 + i2;
+      } else if(op == "-") {
+        return i1 - i2;
+      } else {
+        std::cerr << "AddExpAST::calc: unknown op" << std::endl;
+        assert(0);
+      }
+    }
+  }
   ret_value_t toIR(std::string &ir) override {
     if(type == Type::MULEXP) {
       return mul_exp->toIR(ir);
@@ -438,7 +550,26 @@ public:
     op = _op;
     add_exp = std::move(_add_exp);
   }
-
+  int calc() override {
+    if(type == Type::ADDEXP) {
+      return add_exp->calc();
+    } else {
+      int i1 = rel_exp->calc();
+      int i2 = add_exp->calc();
+      if(op == "<") {
+        return i1 < i2;
+      } else if(op == ">") {
+        return i1 > i2;
+      } else if(op == "<=") {
+        return i1 <= i2;
+      } else if(op == ">=") {
+        return i1 >= i2;
+      } else {
+        std::cerr << "RelExpAST::calc: unknown op" << std::endl;
+        return 0;
+      }
+    }
+  }
   ret_value_t toIR(std::string &ir) override {
     if(type == Type::ADDEXP) {
       return add_exp->toIR(ir);
@@ -519,7 +650,19 @@ public:
     op = _op;
     rel_exp = std::move(_rel_exp);
   }
-
+  int calc() override {
+    if(type == Type::RELEXP) {
+      return rel_exp->calc();
+    } else {
+      int i1 = eq_exp->calc();
+      int i2 = rel_exp->calc();
+      if(op == "==") {
+        return i1 == i2;
+      } else {
+        return i1 != i2;
+      }
+    }
+  }
   ret_value_t toIR(std::string &ir) override {
     if(type == Type::RELEXP) {
       return rel_exp->toIR(ir);
@@ -606,7 +749,19 @@ public:
     op = _op;
     eq_exp = std::move(_eq_exp);
   }
-
+  int calc() override {
+    if (type == Type::EQEXP) {
+      return eq_exp->calc();
+    } else if (type == Type::LANDEXP) {
+      int i1 = land_exp->calc();
+      int i2 = eq_exp->calc();
+      return i1 && i2;
+    } else {
+      std::cerr << "LAndExpAST::calc: unknown type" << std::endl;
+      assert(0);
+    }
+    return 0;
+  }
   void Dump() const override {
     std::cout << "LandExpAST { ";
     switch (type)
@@ -661,7 +816,19 @@ public:
     op = _op;
     land_exp = std::move(_land_exp);
   }
-
+  int calc() override {
+    if (type == Type::LANDEXP) {
+      return land_exp->calc();
+    } else if (type == Type::LOREXP) {
+      int i1 = lor_exp->calc();
+      int i2 = land_exp->calc();
+      return i1 || i2;
+    } else {
+      std::cerr << "LOrExpAST::calc: unknown type" << std::endl;
+      assert(0);
+    }
+    return 0;
+  }
   ret_value_t toIR(std::string &ir) override {
     if (type == Type::LANDEXP) {
       return land_exp->toIR(ir);
@@ -726,7 +893,9 @@ public:
         exp->Dump();
         std::cout << " }";
     }
-
+    int calc() override {
+        return exp->calc();
+    }
     void toDot(std::string& dot) const override {
         std::string node_id = getUniqueID();
         std::string node_def = node_id + "[label=\"<f0> Exp\"];\n";

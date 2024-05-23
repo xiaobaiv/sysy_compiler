@@ -7,6 +7,17 @@ class DeclAST : public BaseAST { // Decl          ::= ConstDecl | VarDecl;
     enum class Type { CONST, VAR } type;
 
     DeclAST(std::unique_ptr<BaseAST> &_const_or_var_decl, Type _type) : const_or_var_decl(std::move(_const_or_var_decl)), type(_type) {}
+    ret_value_t toIR(std::string &ir) override {
+        if(type == Type::CONST) { // Decl          ::= ConstDecl;
+            return {0, RetType::VOID}; // 不生成IR指令，因为是常量声明
+        } else if(type == Type::VAR) { // Decl          ::= VarDecl;
+            return const_or_var_decl->toIR(ir);
+        } else {
+            std::cerr << "DeclAST: unknown type" << std::endl;
+            assert(0);
+        }
+    }
+    
     void Dump() const override {
         std::cout << "DeclAST { ";
         switch (type) {
@@ -111,8 +122,15 @@ public:
         for(auto &item : _const_exp_list) {
             const_exp_list.push_back(std::make_pair(item.first, std::move(item.second)));
         }
+        // 插入符号表，简单情况，没有数组
+        if(const_exp_list.size() == 0) {
+            symbol_table.insert(ident, {Item::Type::CONST, const_init_val->calc()});
+        } else {
+          std::cerr << "ConstDefAST: array not supported" << std::endl;
+          assert(0);
+        }
     }
-
+  
     void Dump() const override {
         std::cout << "ConstDefAST { " << ident;
         for(auto &item : const_exp_list) {
@@ -152,14 +170,23 @@ public:
     std::unique_ptr<BaseAST> const_exp;
     List const_init_val_list;
 
-    ConstInitValAST(std::unique_ptr<BaseAST> &_const_exp) : const_exp(std::move(_const_exp)) { type = Type::CONSTEXP; }
+    ConstInitValAST(std::unique_ptr<BaseAST> &_const_exp) : const_exp(std::move(_const_exp)) { 
+      type = Type::CONSTEXP;  
+    }
     ConstInitValAST(List &_const_init_val_list) {
         for(auto &item : _const_init_val_list) {
             const_init_val_list.push_back(std::make_pair(item.first, std::move(item.second)));
         }
         type = Type::ARRAY;
     }
-
+    int calc() override {
+        if(type == Type::CONSTEXP) {
+            return const_exp->calc();
+        } else {
+            std::cerr << "ConstInitValAST: array not supported" << std::endl;
+            assert(0);
+        }
+    }
     void Dump() const override {
         std::cout << "ConstInitValAST { ";
         switch (type) {
@@ -218,6 +245,13 @@ public:
     }
     btype = std::move(_btype);
   }
+  ret_value_t toIR(std::string &ir) override {
+    // 遍历VarDef，生成IR指令
+    for(auto &item : var_def_list) {
+      item.second->toIR(ir);
+    }
+    return {0, RetType::VOID};
+  }
   void Dump() const override {
     std::cout << "VarDeclAST { ";
     btype->Dump();
@@ -259,6 +293,36 @@ public:
   std::string ident;
   List const_exp_list;
   std::unique_ptr<BaseAST> init_val;
+
+  ret_value_t toIR(std::string &ir) override {
+    if(type == Type::IDENT) { // VarDef        ::= IDENT {"[" ConstExp "]"} ;
+      // 插入符号表，简单情况，没有数组
+      if(!symbol_table.insert(ident, {Item::Type::VAR, -1})) {
+        std::cerr << "VarDefAST: redefined variable" << std::endl;
+        assert(0);
+      }
+      ir += "\t@" + ident + " = alloc i32\n";
+    } else if(type == Type::INIT) { // VarDef        ::= IDENT {"[" ConstExp "]"} "=" InitVal;
+      // 插入符号表，简单情况，没有数组
+      if(const_exp_list.size() == 0) {
+        if(!symbol_table.insert(ident, {Item::Type::VAR, -1})) {
+          std::cerr << "VarDefAST: redefined variable" << std::endl;
+          assert(0);
+        }
+        ir += "\t@" + ident + " = alloc i32\n";
+        ret_value_t ret = init_val->toIR(ir);
+        ir += storeIR(ret, {RetValue(ident), RetType::INDEX});
+      } else {
+        std::cerr << "VarDefAST: array not supported" << std::endl;
+        assert(0);
+      }
+    } else {
+      std::cerr << "VarDefAST: unknown type" << std::endl;
+      assert(0);
+    }
+    return {0, RetType::VOID};
+  }
+
 
   VarDefAST(const std::string &_ident, List &_const_exp_list) : ident(_ident) {
     for(auto &item : _const_exp_list) {
@@ -338,7 +402,14 @@ public:
         }
         type = Type::ARRAY;
     }
-
+    ret_value_t toIR(std::string &ir) override {
+        if(type == Type::EXP) {
+            return exp->toIR(ir);
+        } else {
+            std::cerr << "InitValAST: array not supported" << std::endl;
+            assert(0);
+        }
+    }
     void Dump() const override {
         std::cout << "InitValAST { ";
         switch (type) {
