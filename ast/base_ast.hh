@@ -4,24 +4,41 @@
 #include <memory>
 #include <vector>
 #include <assert.h>
+#include <unordered_map>
+#include "sysbol_table.hh"
 
-enum class RetType { NUMBER, INDEX, VOID };
-typedef std::pair<int, RetType> ret_value_t;
+
+enum class RetType { NUMBER, INDEX, VOID, IDENT };
+struct RetValue
+{
+  int number;
+  std::string ident;
+  RetValue(int n) : number(n) {}
+  RetValue(std::string id) : ident(id) {}
+  RetValue() {}
+};
+
+typedef std::pair<RetValue, RetType> ret_value_t;
 typedef uint64_t var_index_t;
 enum class ListType { CONSTDEF,VARDEF ,DECL, STMT, BLOCKITEM, FUNCFPARAM, EXP, CONSTEXP, INITVAL, CONSTINITVAL };
 // 所有 AST 的基类
 class BaseAST {
   public:
   static var_index_t global_var_index;
+  // 符号表
+  // static std::unordered_map<std::string, int> symbol_table;
+  static SymbolTable symbol_table;
  public:
   virtual ~BaseAST() = default;
 
   virtual void Dump() const = 0;
 
   virtual void toDot(std::string& dot) const = 0;
-
+  virtual int calc() {
+    std::cerr << "calc not implemented\n";
+    assert(0);
+  }
   virtual ret_value_t toIR(std::string &ir) {
-    ir += "toIR not implemented\n";
     std::cerr << "toIR not implemented\n";
     assert(0);
   }
@@ -33,17 +50,17 @@ class BaseAST {
     std::string ir;
     if(ret1.second == RetType::NUMBER) {
       if(ret2.second == RetType::NUMBER) {
-        ir = "\t%" + std::to_string(global_var_index++) + " = " + op + " " + std::to_string(ret1.first) + ", " + std::to_string(ret2.first) + "\n";
+        ir = "\t%" + std::to_string(global_var_index++) + " = " + op + " " + std::to_string(ret1.first.number) + ", " + std::to_string(ret2.first.number) + "\n";
       } else if(ret2.second == RetType::INDEX) {
-        ir = "\t%" + std::to_string(global_var_index++) + " = " + op + " " + std::to_string(ret1.first) + ", %" + std::to_string(ret2.first) + "\n";
+        ir = "\t%" + std::to_string(global_var_index++) + " = " + op + " " + std::to_string(ret1.first.number) + ", %" + std::to_string(ret2.first.number) + "\n";
       } else {
         std::cerr << "getIR: unknown ret2 type\n";
       }
     } else if(ret1.second == RetType::INDEX) {
       if(ret2.second == RetType::NUMBER) {
-        ir = "\t%" + std::to_string(global_var_index++) + " = " + op + " %" + std::to_string(ret1.first) + ", " + std::to_string(ret2.first) + "\n";
+        ir = "\t%" + std::to_string(global_var_index++) + " = " + op + " %" + std::to_string(ret1.first.number) + ", " + std::to_string(ret2.first.number) + "\n";
       } else if(ret2.second == RetType::INDEX) {
-        ir = "\t%" + std::to_string(global_var_index++) + " = " + op + " %" + std::to_string(ret1.first) + ", %" + std::to_string(ret2.first) + "\n";
+        ir = "\t%" + std::to_string(global_var_index++) + " = " + op + " %" + std::to_string(ret1.first.number) + ", %" + std::to_string(ret2.first.number) + "\n";
       } else {
         std::cerr << "getIR: unknown ret2 type\n";
       }
@@ -52,7 +69,29 @@ class BaseAST {
     }
     return ir;
   }
-
+  virtual std::string storeIR(ret_value_t ret1, ret_value_t ret2) const {
+    std::string ir;
+    // ret2.second must be INDENT
+    if(ret1.second == RetType::NUMBER) {
+      ir = "\tstore " + std::to_string(ret1.first.number) + ", @" + ret2.first.ident + "\n";
+    } else if(ret1.second == RetType::INDEX) {
+      ir = "\tstore %" + std::to_string(ret1.first.number) + ", @" + ret2.first.ident + "\n";
+    } else {
+      std::cerr << "storeIR: unknown ret1 type\n";
+      assert(0);
+    }
+    return ir;
+  }
+  virtual std::string loadIR(ret_value_t ret) const {
+    std::string ir;
+    if(ret.second == RetType::IDENT) {
+      ir = "\t%" + std::to_string(global_var_index++) + " = load @" + ret.first.ident + "\n";
+    } else {
+      std::cerr << "loadIR: unknown ret type\n";
+      assert(0);
+    }
+    return ir;
+  }
 };
 
 typedef std::vector<std::pair<ListType, std::unique_ptr<BaseAST>>> List;
