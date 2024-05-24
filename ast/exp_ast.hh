@@ -727,15 +727,39 @@ public:
   ret_value_t toIR(std::string &ir) override {
     if(type == Type::EQEXP) {
       return eq_exp->toIR(ir);
-    } else {
-      ret_value_t i1 = land_exp->toIR(ir);
+    } else { // 短路求值
+      /* ret_value_t i1 = land_exp->toIR(ir);
       ret_value_t i2 = eq_exp->toIR(ir);
       // koopa IR 不支持 两个数直接与，需要判断两个数是否都不为0，然后按位与
       // ir += getIR("and", i1, i2);
       ir += getIR("ne", i1, {0, RetType::NUMBER});
       ir += getIR("ne", i2, {0, RetType::NUMBER});
       ir += getIR("and", {global_var_index - 2, RetType::INDEX}, {global_var_index - 1, RetType::INDEX});
+      return {global_var_index - 1, RetType::INDEX}; */
+      symbol_table.push(); // 为了防止result变量名重复，所以需要新建一个作用域
+      // int result = 1;
+      symbol_table.insert("result", {Item::Type::VAR, 1});
+      ir += allocIR("result");
+      ir += storeIR({0, RetType::NUMBER}, {RetValue("result"), RetType::IDENT});
+
+      std::string if_label = "if_" + std::to_string(global_label_index);
+      std::string end_label = "end_" + std::to_string(global_label_index++);
+
+      ret_value_t i1 = land_exp->toIR(ir);
+      ir += getIR("eq", i1, {1, RetType::NUMBER});
+      ir += brIR({global_var_index - 1, RetType::INDEX}, if_label, end_label);
+
+      ir += labelIR(if_label);
+      ret_value_t i2 = eq_exp->toIR(ir);
+      ir += getIR("ne", i2, {0, RetType::NUMBER});
+      ir += storeIR({global_var_index - 1, RetType::INDEX }, {RetValue("result"), RetType::IDENT});
+      ir += jumpIR(end_label);
+
+      ir += labelIR(end_label);
+      ir += loadIR({RetValue("result"), RetType::IDENT});
+      symbol_table.pop();
       return {global_var_index - 1, RetType::INDEX};
+    
     }
   }
 
@@ -832,13 +856,37 @@ public:
   ret_value_t toIR(std::string &ir) override {
     if (type == Type::LANDEXP) {
       return land_exp->toIR(ir);
-    } else if (type == Type::LOREXP) {
-      ret_value_t i1 = lor_exp->toIR(ir);
+    } else if (type == Type::LOREXP) { // 短路求值
+      /* ret_value_t i1 = lor_exp->toIR(ir);
       ret_value_t i2 = land_exp->toIR(ir);
       // koopa IR 不支持 两个数直接或，需要按位或，然后与0比较，得到结果
       // ir += getIR("or", i1, i2); 错误的
       ir += getIR("or", i1, i2);
       ir += getIR("ne", {global_var_index - 1, RetType::INDEX}, {0, RetType::NUMBER});
+      return {global_var_index - 1, RetType::INDEX}; */
+      symbol_table.push(); // 为了防止result变量名重复，所以需要新建一个作用域
+      // int result = 1;
+      symbol_table.insert("result", {Item::Type::VAR, 1});
+      ir += allocIR("result");
+      ir += storeIR({1,RetType::NUMBER}, {RetValue("result"), RetType::IDENT});
+
+
+      std::string if_label = "if_" + std::to_string(global_label_index);
+      std::string end_label = "end_" + std::to_string(global_label_index++);
+
+      ret_value_t i1 = lor_exp->toIR(ir);
+      ir += getIR("eq", i1, {0, RetType::NUMBER});
+      ir += brIR({global_var_index - 1, RetType::INDEX}, if_label, end_label);
+
+      ir += labelIR(if_label);
+      ret_value_t i2 = land_exp->toIR(ir);
+      ir += getIR("ne", i2, {0, RetType::NUMBER});
+      ir += storeIR({global_var_index - 1, RetType::INDEX}, {RetValue("result"), RetType::IDENT});
+      ir += jumpIR(end_label);
+
+      ir += labelIR(end_label);
+      ir += loadIR({RetValue{"result"}, RetType::IDENT});
+      symbol_table.pop();
       return {global_var_index - 1, RetType::INDEX};
     } else {
       std::cerr << "LOrExpAST::toIR: unknown type" << std::endl;
