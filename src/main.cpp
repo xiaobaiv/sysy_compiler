@@ -97,9 +97,9 @@ int main(int argc, char *argv[]) {
         genDot(ast); // Only call if -dot is specified
     }
 
-    string ir;
-    ast->toIR(ir);
 
+    ast->toIR(ast->ir);
+    string ir = ast->ir;
     if (mode == "-koopa") {
         ofstream irFile(output, ios::out | ios::trunc);
         if (irFile.is_open()) {
