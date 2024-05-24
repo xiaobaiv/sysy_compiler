@@ -1,5 +1,5 @@
 # SysY Compiler 
-**latest update: 2024/5/24**
+**latest update: 2024/5/25**
 
 本实验参考北大编译原理实验指导文档：https://pku-minic.github.io/online-doc/#/ ，目前完成了语法分析和AST的构建，使用graphviz工具进行AST的绘制，正在完成IR和目标代码的生成。
 
