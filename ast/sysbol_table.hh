@@ -1,5 +1,6 @@
 #include <vector>
 #include <unordered_map>
+#include <map>
 // 
 /* 
 * this class is a symbol table for the compiler, the table is a vector of items, 
@@ -14,8 +15,7 @@
 * single_table: map<string, item>
 * sysbol_table: // 为了实现作用域嵌套，理论上使用栈的数据结构更加方便。但是这里使用vector来实现，因为vector可以方便访问{上一层}的符号表，栈底是全局符号表
 * let's start!
- */
-class Item {
+ */class Item {
 public:
     enum class Type {CONST, VAR};
     Type type;
@@ -26,10 +26,12 @@ public:
     bool isVar() { return type == Type::VAR; }
     int getValue() { return value; }
 };
+
 class SingleTable {
 public:
-    std::unordered_map<std::string, Item> table;
-    SingleTable() {}
+    std::map<std::string, Item> table;
+    int index;
+    SingleTable(int idx) : index(idx) {} // 初始化索引值
     bool insert(std::string ident, Item item) {
         if (table.find(ident) != table.end()) return false;
         table[ident] = item;
@@ -40,11 +42,15 @@ public:
         return &table[ident];
     }
 };
-class SymbolTable { // 栈底是全局符号表
+
+class SymbolTable {
 public:
     std::vector<SingleTable> tables;
+    int only_increase_index;
     SymbolTable() {
-        tables.push_back(SingleTable());
+        only_increase_index = 0;
+
+        push();
     }
     bool insert(std::string ident, Item item) {
         return tables.back().insert(ident, item);
@@ -72,9 +78,30 @@ public:
         return item->getValue();
     }
     void push() {
-        tables.push_back(SingleTable());
+        tables.emplace_back(only_increase_index++);
     }
     void pop() {
         tables.pop_back();
+    }
+    std::string getUniqueIdent(std::string ident) {
+        // print();
+        int x = 999;
+        for (int i = tables.size() - 1; i >= 0; i--) {
+            if (tables[i].find(ident) != nullptr) {
+                x = tables[i].index;
+                break;
+            }
+        }
+        return ident + "_" + std::to_string(x);
+    }
+    void print() {
+        std::cout << "---------------------------------------------" << std::endl;
+        for (int i = 0; i < tables.size(); i++) {
+            std::cout << "table " << i << ", ";
+            std::cout << "index " << tables[i].index << std::endl;
+            for (auto it = tables[i].table.begin(); it != tables[i].table.end(); it++) {
+                std::cout << it->first << " " << it->second.value << std::endl;
+            }
+        }
     }
 };
