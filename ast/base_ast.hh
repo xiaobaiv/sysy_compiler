@@ -73,9 +73,9 @@ class BaseAST {
     std::string ir;
     // ret2.second must be INDENT
     if(ret1.second == RetType::NUMBER) {
-      ir = "\tstore " + std::to_string(ret1.first.number) + ", @" + ret2.first.ident + "\n";
+      ir = "\tstore " + std::to_string(ret1.first.number) + ", @" + symbol_table.getUniqueIdent(ret2.first.ident) + "\n";
     } else if(ret1.second == RetType::INDEX) {
-      ir = "\tstore %" + std::to_string(ret1.first.number) + ", @" + ret2.first.ident + "\n";
+      ir = "\tstore %" + std::to_string(ret1.first.number) + ", @" + symbol_table.getUniqueIdent(ret2.first.ident) + "\n";
     } else {
       std::cerr << "storeIR: unknown ret1 type\n";
       assert(0);
@@ -85,11 +85,15 @@ class BaseAST {
   virtual std::string loadIR(ret_value_t ret) const {
     std::string ir;
     if(ret.second == RetType::IDENT) {
-      ir = "\t%" + std::to_string(global_var_index++) + " = load @" + ret.first.ident + "\n";
+      ir = "\t%" + std::to_string(global_var_index++) + " = load @" + symbol_table.getUniqueIdent(ret.first.ident) + "\n";
     } else {
       std::cerr << "loadIR: unknown ret type\n";
       assert(0);
     }
+    return ir;
+  }
+  virtual std::string allocIR(std::string ident) const {
+    std::string ir = "\t@" + symbol_table.getUniqueIdent(ident) + " = alloc i32\n";
     return ir;
   }
 };
