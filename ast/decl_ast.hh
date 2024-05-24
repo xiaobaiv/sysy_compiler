@@ -131,7 +131,6 @@ public:
         }
         // 插入符号表，简单情况，没有数组
         if(const_exp_list.size() == 0) { 
-            std::cout << "insert const " << ident << " = " << const_init_val->calc() << "\n";
             symbol_table.insert(ident, {Item::Type::CONST, const_init_val->calc()});
         } else {
           std::cerr << "ConstDefAST: array not supported" << std::endl;
