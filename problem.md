@@ -31,3 +31,77 @@
 #### T6: 为了处理变量（Lv4）IR 的生成，为ret_value_t 增加 IDENT 类别，特别地，需要将 LVal 与 load 指令解耦合，在 caller 处进行判断，若 LVal 为等号左值，无需load，直接 store, 否则load。
 
 #### Q7: 语义检查很繁琐，对函数的实现有着逻辑缜密的要求。是否可以将其与开发解耦合？或者是否可以使用理论模型（maybe 图）使得语义检查（包括异常管理）思路清晰？
+
+### 2024/5/24
+
+#### Q8: 如何管理多个作用域嵌套的符号表？
+
+#### A8: 使用栈结构。相应地，为了适应 Koopa IR symbol 的不可复用性，符号表类提供一个接口getUniqueIdent()，实现原理是：每个作用域出现的符号表都有一个单独的标号（由SymbolTable在push()时维护），UniqueIdent() = ident + "_" + table.index。需要注意的是：符号表中ident（键值）不受后缀影响。全局作用域index=0
+```c
+# 效果如下
+fun @main(): i32 {
+%entry:
+	@x_1 = alloc i32 #  int main() {
+	store 10, @x_1	 #  	int x = 10;
+	%0 = load @x_1   #  	x = x + 1;
+	%1 = add %0, 1   #  	return x;
+	store %1, @x_1   #  }
+	%2 = load @x_1   #
+	ret %2
+}
+
+```
+
+#### Q9: 遇到了一个新问题，我是在Block里创建新的符号表，还是在调用Block时创建？
+
+#### A9: 前者虽然工整，但是如果是函数的Block，那么函数的参数要像C一样，归属于block的作用域，有矛盾，需要引入新的数据结构。
+
+#### Q10: 接着Q9，考虑函数调用，符号表是否是短暂地弹出，是否需要回收（保存现场），然后再次压入？
+
+#### A10： 不需要，这是一个误区，幸亏吃了口泡面，不然就写错了。 我们只是负责生成IR代码，并不是执行代码，所以扫描是线性的。
+```c
+int a = 10;
+int test(int x, int y) {
+  return x + y + a;
+
+}
+
+int main() {
+  int a = 1;
+  int b = test(2, 3);
+  return b;
+}
+
+```
+对应下方IR:
+```c
+
+global @a_00 = alloc i32, 10
+fun @test(@x_test: i32, @y_test: i32): i32 {
+%entry:
+  %x_10 = alloc i32
+  store @x_test, %x_10
+  %y_10 = alloc i32
+  store @y_test, %y_10
+  %0 = load %x_10
+  %1 = load %y_10
+  %2 = add %0, %1
+  %3 = load @a_00
+  %4 = add %2, %3
+  ret %4
+}
+fun @main(): i32 {
+%entry:
+  @a_21 = alloc i32
+  store 1, @a_21
+  @b_21 = alloc i32
+  %5 = call @test(2, 3)
+  store %5, @b_21
+  %6 = load @b_21
+  ret %6
+}
+```
+
+#### Q11: 刚遇到了一个贼傻逼的错误，无论const decl在哪层嵌套，都会被放到全局的符号表里，原因竟是？
+
+#### A11: 原因在于我一开始把常量声明的符号表插入操作放在了constdef的构造函数里（因为常量声明实际上不生成任何IR，我就省略了子树的toIR（）函数，结果弄巧成拙），也就是说在语法分析的时候就插到符号表里了，而这时只有全局符号表。
