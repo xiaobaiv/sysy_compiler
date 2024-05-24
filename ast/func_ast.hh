@@ -314,7 +314,8 @@ public:
                 | "return" [Exp] ";"; 
     */
   ret_value_t toIR(std::string& ir) override {
-    if (type == Type::RETURN) {
+    if (type == Type::RETURN && !isEnd(ir)) {
+
       if(option == Option::EXP0) { // Stmt          ::= "return" ";";
         ir += "\tret\n";
       } else if (option == Option::EXP1) { // Stmt          ::= "return" Exp ";";
@@ -344,6 +345,35 @@ public:
       symbol_table.push();
       block->toIR(ir);
       symbol_table.pop();
+    } else if(type == Type::IF) { // "if" "(" Exp ")" Stmt 
+      std::string then_label = "then_" + std::to_string(global_label_index);
+      std::string end_label = "end_" + std::to_string(global_label_index++);
+      ir += "\t// if 的条件判断部分\n";
+      ret_value_t exp_ret = exp->toIR(ir);
+      ir += brIR(exp_ret, then_label, end_label);
+      ir += "\n// if 语句的 if 分支 \n";
+      ir += labelIR(then_label);
+      if_stmt->toIR(ir);
+      ir += jumpIR(end_label);
+      ir += "\n// if 语句之后的内容, if/else 分支的交汇处 \n";
+      ir += labelIR(end_label);
+    } else if(type == Type::IFELSE) { // "if" "(" Exp ")" Stmt "else" Stmt
+      std::string then_label = "then_" + std::to_string(global_label_index);
+      std::string else_label = "else_" + std::to_string(global_label_index);
+      std::string end_label = "end_" + std::to_string(global_label_index++);
+      ir += "\t// if 的条件判断部分\n";
+      ret_value_t exp_ret = exp->toIR(ir);
+      ir += brIR(exp_ret, then_label, else_label);
+      ir += "\n// if 语句的 if 分支 \n";
+      ir += labelIR(then_label);
+      if_stmt->toIR(ir);
+      ir += jumpIR(end_label);
+      ir += "\n// if 语句的 else 分支 \n";
+      ir += labelIR(else_label);
+      else_stmt->toIR(ir);
+      ir += jumpIR(end_label);
+      ir += "\n// if 语句之后的内容, if/else 分支的交汇处 \n";
+      ir += labelIR(end_label);
     }
     else {
         std::cerr << "StmtAST::toIR: unknown option" << std::endl;
