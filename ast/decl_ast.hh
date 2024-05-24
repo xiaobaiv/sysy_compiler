@@ -9,7 +9,7 @@ class DeclAST : public BaseAST { // Decl          ::= ConstDecl | VarDecl;
     DeclAST(std::unique_ptr<BaseAST> &_const_or_var_decl, Type _type) : const_or_var_decl(std::move(_const_or_var_decl)), type(_type) {}
     ret_value_t toIR(std::string &ir) override {
         if(type == Type::CONST) { // Decl          ::= ConstDecl;
-            return {0, RetType::VOID}; // 不生成IR指令，因为是常量声明
+            return const_or_var_decl->toIR(ir);
         } else if(type == Type::VAR) { // Decl          ::= VarDecl;
             return const_or_var_decl->toIR(ir);
         } else {
@@ -60,6 +60,13 @@ public:
       const_def_list.push_back(std::make_pair(item.first, std::move(item.second)));
     }
     btype = std::move(_btype);
+  }
+  ret_value_t toIR(std::string &ir) override {
+    // 遍历ConstDef，生成IR指令
+    for(auto &item : const_def_list) {
+      item.second->toIR(ir);
+    }
+    return {0, RetType::VOID};
   }
   void Dump() const override {
     std::cout << "ConstDeclAST { ";
@@ -123,7 +130,8 @@ public:
             const_exp_list.push_back(std::make_pair(item.first, std::move(item.second)));
         }
         // 插入符号表，简单情况，没有数组
-        if(const_exp_list.size() == 0) {
+        if(const_exp_list.size() == 0) { 
+            std::cout << "insert const " << ident << " = " << const_init_val->calc() << "\n";
             symbol_table.insert(ident, {Item::Type::CONST, const_init_val->calc()});
         } else {
           std::cerr << "ConstDefAST: array not supported" << std::endl;
@@ -131,6 +139,16 @@ public:
         }
     }
   
+    ret_value_t toIR(std::string &ir) override {
+        if(const_exp_list.size() == 0) { // ConstDef      ::= IDENT {"[" ConstExp "]"} "=" ConstInitVal;
+            // 插入符号表，简单情况，没有数组,不生成指令，只插入符号表
+           symbol_table.insert(ident, {Item::Type::CONST, const_init_val->calc()});
+        } else {
+            std::cerr << "ConstDefAST: array not supported" << std::endl;
+            assert(0);
+        }
+        return {0, RetType::VOID};
+    }
     void Dump() const override {
         std::cout << "ConstDefAST { " << ident;
         for(auto &item : const_exp_list) {
@@ -301,7 +319,7 @@ public:
         std::cerr << "VarDefAST: redefined variable" << std::endl;
         assert(0);
       }
-      ir += "\t@" + ident + " = alloc i32\n";
+      ir += allocIR(ident);
     } else if(type == Type::INIT) { // VarDef        ::= IDENT {"[" ConstExp "]"} "=" InitVal;
       // 插入符号表，简单情况，没有数组
       if(const_exp_list.size() == 0) {
@@ -309,7 +327,7 @@ public:
           std::cerr << "VarDefAST: redefined variable" << std::endl;
           assert(0);
         }
-        ir += "\t@" + ident + " = alloc i32\n";
+        ir += allocIR(ident);
         ret_value_t ret = init_val->toIR(ir);
         ir += storeIR(ret, {RetValue(ident), RetType::INDEX});
       } else {

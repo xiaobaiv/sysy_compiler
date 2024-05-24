@@ -13,29 +13,35 @@ FunDef ::= "fun" SYMBOL "(" [FunParams] ")" [":" Type] "{" FunBody "}";
 FunParams ::= SYMBOL ":" Type {"," SYMBOL ":" Type};
 FunBody ::= {Block};
 Block ::= SYMBOL ":" {Statement} EndStatement;
-Statement ::= SymbolDef | Store | FunCall;
+Statement ::= SymbolDef | Store | FunC;
 EndStatement ::= Branch | Jump | Return;
  */
 
   // 生成ir 的函数 toIR, 结果存在 字符串 ir 中，遵循ir 语法
   ret_value_t toIR(std::string& ir) override {
+    // 添加符号表
+    symbol_table.push();
     if (option == Option::F0) { // FuncDef       ::= FuncType IDENT "(" ")" Block; 遵循ir语法，生成ir语言FunDef ::= "fun" SYMBOL "(" [FunParams] ")" [":" Type] "{" FunBody "}";
       ir += "fun @" + ident + "()";
       func_type->toIR(ir);
       ir += " {\n";
+      ir += "%entry:\n"; // %entry 与 函数定义关联
       block->toIR(ir);
       ir += "}\n";
     } else if (option == Option::F1) { // FuncDef       ::= FuncType IDENT "(" FuncFParams ")" Block; 遵循ir语法，生成ir语言FunDef ::= "fun" SYMBOL "(" FunParams ")" [":" Type] "{" FunBody "}";
       ir += "fun @" + ident + "(";
-      func_fparams->toIR(ir);
+      func_fparams->toIR(ir); // 需要将参数放到子作用域中 todo
       ir += ")";
       func_type->toIR(ir);
       ir += " {\n";
+      ir += "%entry:\n"; // %entry 与 函数定义关联
       block->toIR(ir);
       ir += "}\n";
     } else {
       std::cerr << "FuncDefAST::toIR: unknown option" << std::endl;
     } 
+    // 删除符号表
+    symbol_table.pop();
     return {0, RetType::VOID};
   }
 
@@ -197,7 +203,7 @@ public:
   }
 
   ret_value_t toIR(std::string& ir) override { // %entry:
-    ir += "%entry:\n";
+
     for(auto &item : block_item_list) {
       item.second->toIR(ir);
     }
@@ -298,7 +304,15 @@ public:
     type = Type::ASSIGN;
   }
   StmtAST() {}
-
+    /* Stmt ::=  LVal "=" Exp ";"
+                | [Exp] ";"
+                | Block
+                | "if" "(" Exp ")" Stmt ["else" Stmt]
+                | "while" "(" Exp ")" Stmt
+                | "break" ";"
+                | "continue" ";"
+                | "return" [Exp] ";"; 
+    */
   ret_value_t toIR(std::string& ir) override {
     if (type == Type::RETURN) {
       if(option == Option::EXP0) { // Stmt          ::= "return" ";";
@@ -317,14 +331,23 @@ public:
         } else {
           std::cerr << "StmtAST::toIR: unknown ret type" << std::endl;
         }
-      } else {
-        std::cerr << "StmtAST::toIR: unknown option" << std::endl;
-      }
+      } 
     } else if(type == Type::ASSIGN) {
       ret_value_t exp_ret = exp->toIR(ir);
       ret_value_t lval_ret = lval->toIR(ir);
       ir += storeIR(exp_ret, lval_ret);
+    } else if(type == Type::EXP) {
+      if(option == Option::EXP1) {
+        exp->toIR(ir);
+      }
+    } else if(type == Type::BLOCK) {
+      symbol_table.push();
+      block->toIR(ir);
+      symbol_table.pop();
     }
+    else {
+        std::cerr << "StmtAST::toIR: unknown option" << std::endl;
+      }
     return {0, RetType::VOID};
   }
 
@@ -383,14 +406,6 @@ public:
   }
 
   void toDot(std::string& dot) const override {
-    /* Stmt          ::= LVal "=" Exp ";"
-                | [Exp] ";"
-                | Block
-                | "if" "(" Exp ")" Stmt ["else" Stmt]
-                | "while" "(" Exp ")" Stmt
-                | "break" ";"
-                | "continue" ";"
-                | "return" [Exp] ";"; */
     std::string node_id = getUniqueID();
     if (type == Type::ASSIGN) { // Stmt          ::= LVal "=" Exp ";"
       std::string node_def = node_id + "[label=\"<f0> LVal | <f1> = | <f2> Exp\"];\n";
