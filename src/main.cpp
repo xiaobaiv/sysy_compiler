@@ -120,6 +120,6 @@ int main(int argc, char *argv[]) {
             return -1;
         }
     }
-
+//    ast->symbol_table.print();
     return 0;
 }
