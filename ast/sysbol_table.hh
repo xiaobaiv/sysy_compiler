@@ -17,13 +17,14 @@
 * let's start!
  */class Item {
 public:
-    enum class Type {CONST, VAR};
+    enum class Type {CONST, VAR, FUNC};
     Type type;
     int value;
-    Item(Type type, int value): type(type), value(value) {}
+    Item(Type type, int value): type(type), value(value) {} // 如果是函数的话，value表示FuncType，如果FuncType是0表示void，否则表示int类型
     Item() {}
     bool isConst() { return type == Type::CONST; }
     bool isVar() { return type == Type::VAR; }
+    bool isFunc() { return type == Type::FUNC; }
     int getValue() { return value; }
 };
 
@@ -49,8 +50,16 @@ public:
     int only_increase_index;
     SymbolTable() {
         only_increase_index = 0;
-
         push();
+        // 在初始化时候，将sysy库函数加入符号表，decl @getint(): i32\ndecl @getch(): i32\ndecl @getarray(*i32): i32\ndecl @putint(i32)\ndecl @putch(i32)\ndecl @putarray(i32, *i32)\ndecl @starttime()\ndecl @stoptime()
+        insert("getint", Item(Item::Type::FUNC, 1));
+        insert("getch", Item(Item::Type::FUNC, 1));
+        insert("getarray", Item(Item::Type::FUNC, 1));
+        insert("putint", Item(Item::Type::FUNC, 0));
+        insert("putch", Item(Item::Type::FUNC, 0));
+        insert("putarray", Item(Item::Type::FUNC, 0));
+        insert("starttime", Item(Item::Type::FUNC, 0));
+        insert("stoptime", Item(Item::Type::FUNC, 0));
     }
     bool insert(std::string ident, Item item) {
         return tables.back().insert(ident, item);
@@ -72,10 +81,20 @@ public:
         if (item == nullptr) return false;
         return item->isVar();
     }
+    bool isFunc(std::string ident) {
+        Item* item = find(ident);
+        if (item == nullptr) return false;
+        return item->isFunc();
+    }
     int getValue(std::string ident) {
         Item* item = find(ident);
         if (item == nullptr) return 0;
         return item->getValue();
+    }
+    bool isVoid(std::string ident) {
+        Item* item = find(ident);
+        if (item == nullptr) return false;
+        return item->getValue() == 0;
     }
     void push() {
         tables.emplace_back(only_increase_index++);
@@ -103,5 +122,9 @@ public:
                 std::cout << it->first << " " << it->second.value << std::endl;
             }
         }
+    }
+
+    bool isGlobal() {
+        return tables.back().index == 0;
     }
 };
