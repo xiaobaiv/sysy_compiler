@@ -20,14 +20,18 @@ EndStatement ::= Branch | Jump | Return;
   // 生成ir 的函数 toIR, 结果存在 字符串 ir 中，遵循ir 语法
   ret_value_t toIR(std::string& ir) override {
     // 添加符号表
+    if(!symbol_table.insert(ident, {Item::Type::FUNC, func_type->isVoid()? 0: 1 })) { // 检查全局变量或函数是否重名
+      std::cerr << "FuncDefAST::toIR: function name " << ident << " already exists" << std::endl;
+      assert(0);
+    }
     symbol_table.push();
+
     if (option == Option::F0) { // FuncDef       ::= FuncType IDENT "(" ")" Block; 遵循ir语法，生成ir语言FunDef ::= "fun" SYMBOL "(" [FunParams] ")" [":" Type] "{" FunBody "}";
       ir += "fun @" + ident + "()";
       func_type->toIR(ir);
       ir += " {\n";
       ir += "%entry:\n"; // %entry 与 函数定义关联
       block->toIR(ir);
-      ir += "}\n";
     } else if (option == Option::F1) { // FuncDef       ::= FuncType IDENT "(" FuncFParams ")" Block; 遵循ir语法，生成ir语言FunDef ::= "fun" SYMBOL "(" FunParams ")" [":" Type] "{" FunBody "}";
       ir += "fun @" + ident + "(";
       func_fparams->toIR(ir); // 需要将参数放到子作用域中 todo
@@ -35,11 +39,27 @@ EndStatement ::= Branch | Jump | Return;
       func_type->toIR(ir);
       ir += " {\n";
       ir += "%entry:\n"; // %entry 与 函数定义关联
+      func_fparams->xx(ir);
       block->toIR(ir);
-      ir += "}\n";
     } else {
       std::cerr << "FuncDefAST::toIR: unknown option" << std::endl;
     } 
+
+    // 判断函数是否有返回值
+    if(!isEnd(ir, 1)) {
+      // 如果函数类型是void，则不需要返回值
+      if(func_type->isVoid()) {
+        ir += "\tret\n";
+      } else {
+        ir += "\tret 0\n";
+      }
+    }
+    // 解析ir，最后的ret指令，查看是否有返回值
+    if(!isEnd(ir, 2) && !func_type->isVoid()) {
+      std::cerr << "FuncDefAST::toIR: function " << ident << " has no return value" << std::endl;
+      assert(0);
+    }
+    ir += "}\n";
     // 删除符号表
     symbol_table.pop();
     return {0, RetType::VOID};
@@ -84,6 +104,10 @@ class FuncTypeAST : public BaseAST { // FuncType      ::= "void" | "int";
 public:
   std::string type;
  
+
+  bool isVoid() override {
+    return type == "void";
+  }
   ret_value_t toIR(std::string& ir) override {
     if(type == "int") {
       ir += ": i32";
@@ -116,7 +140,21 @@ public:
     }
   }
 
+  ret_value_t toIR(std::string& ir) override {
+    for(int i = 0; i < fparams_list.size(); i++) {
+      fparams_list[i].second->toIR(ir);
+      if(i != fparams_list.size() - 1) {
+        ir += ", ";
+      }
+    }
+    return {0, RetType::VOID};
+  }
 
+  void xx(std::string &ir) override {
+    for(auto &item : fparams_list) {
+      item.second->xx(ir);
+    }
+  }
 
   void Dump() const override {
     std::cout << "FuncFParamsAST { ";
@@ -152,6 +190,38 @@ public:
       const_exp_list.push_back(std::make_pair(item.first, std::move(item.second)));
     }
   }
+  ret_value_t toIR(std::string &ir) override {
+    if(option == Option::C0) { // FuncFParam    ::= BType IDENT ;
+      if(!symbol_table.insert("param_" + ident, {Item::Type::VAR, 0})) { // 检查全局变量或函数是否重名
+        std::cerr << "FuncFParamAST::toIR: variable name " << ident << " already exists" << std::endl;
+        assert(0);
+      }
+      ir += "@" + symbol_table.getUniqueIdent("param_" + ident) + ": i32";
+
+    } else if(option == Option::C1) { // FuncFParam    ::= BType IDENT "[" "]" {"[" ConstExp "]"};
+       std::cerr << "FuncFParamAST::toIR: array not implemented" << std::endl;
+    } else {
+      std::cerr << "FuncFParamAST::toIR: unknown option" << std::endl;
+    }
+    return {0, RetType::VOID};
+  }
+
+  // 在块中将形参存入内存
+  void xx(std::string &ir) override {
+    if(option == Option::C0) { // FuncFParam    ::= BType IDENT ;
+      if(!symbol_table.insert(ident, {Item::Type::VAR, 0})) { // 检查全局变量或函数是否重名
+        std::cerr << "FuncFParamAST::toIR: variable name: " << ident << " already exists" << std::endl;
+        assert(0);
+      }
+      ir += allocIR(ident);
+      ir += storeIR({"param_" + ident, RetType::IDENT}, {ident, RetType::IDENT});
+    } else if(option == Option::C1) { // FuncFParam    ::= BType IDENT "[" "]" {"[" ConstExp "]"};
+       std::cerr << "FuncFParamAST::toIR: array not implemented" << std::endl;
+    } else {
+      std::cerr << "FuncFParamAST::toIR: unknown option" << std::endl;
+    }
+  }
+
   void Dump() const override {
     std::cout << "FuncFParamAST { " << ident;
     for(auto &item : const_exp_list) {
@@ -374,10 +444,49 @@ public:
       ir += jumpIR(end_label);
       ir += "\n// if 语句之后的内容, if/else 分支的交汇处 \n";
       ir += labelIR(end_label);
-    }
-    else {
-        std::cerr << "StmtAST::toIR: unknown option" << std::endl;
+    } else if (type == Type::WHILE) { // "while" "(" Exp ")" Stmt
+
+      loop_stack.push(global_label_index); // 压入循环的标签号
+      std::string while_entry_label = "while_entry_" + std::to_string(global_label_index);
+      std::string while_body_label = "while_body_" + std::to_string(global_label_index);
+      std::string end_label = "end_" + std::to_string(global_label_index++);
+
+      ir += jumpIR(while_entry_label);
+      ir += "\t// while 循环的入口\n";
+      ir += labelIR(while_entry_label);
+      ret_value_t exp_ret = exp->toIR(ir);
+      ir += brIR(exp_ret, while_body_label, end_label);
+
+      ir += "\n// while 循环的主体\n";
+      ir += labelIR(while_body_label);
+      if_stmt->toIR(ir);
+      ir += jumpIR(while_entry_label);
+
+      ir += "\n// while 循环结束\n";
+      ir += labelIR(end_label);
+      loop_stack.pop(); // 弹出循环的标签号
+
+    } else if (type == Type::BREAK) { // "break" ";";
+      // 判断是否在循环中
+      if(loop_stack.empty()) {
+        std::cerr << "break 语句不在循环中" << std::endl;
+        assert(0);
       }
+      std::string end_label = "end_" + std::to_string(loop_stack.top());
+      ir += jumpIR(end_label);
+
+    } else if (type == Type::CONTINUE) { // "continue" ";";
+      // 判断是否在循环中
+      if(loop_stack.empty()) {
+        std::cerr << "continue 语句不在循环中" << std::endl;
+        assert(0);
+      }
+      std::string while_entry_label = "while_entry_" + std::to_string(loop_stack.top());
+      ir += jumpIR(while_entry_label);
+    } else {
+      std::cerr << "StmtAST::toIR: unknown type" << std::endl;
+    }
+    
     return {0, RetType::VOID};
   }
 
