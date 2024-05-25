@@ -3,10 +3,12 @@
 #include <iostream>
 #include <memory>
 #include <vector>
+#include <stack>
 #include <assert.h>
 #include <unordered_map>
 #include <algorithm>
 #include "sysbol_table.hh"
+#include <stdarg.h>
 
 
 enum class RetType { NUMBER, INDEX, VOID, IDENT };
@@ -31,6 +33,7 @@ class BaseAST {
   // static std::unordered_map<std::string, int> symbol_table;
   static SymbolTable symbol_table;
   static std::string ir;
+  static std::stack<var_index_t> loop_stack;
  public:
   virtual ~BaseAST() = default;
 
@@ -43,6 +46,19 @@ class BaseAST {
   }
   virtual ret_value_t toIR(std::string &ir) {
     std::cerr << "toIR not implemented\n";
+    assert(0);
+  }
+
+  virtual void xx(std::string &ir) {
+    std::cerr << "xx not implemented\n";
+    assert(0);
+  }
+  virtual void readArgs(std::vector<ret_value_t> &args){
+    std::cerr << "readArgs not implemented\n";
+    assert(0);
+  }
+  virtual bool isVoid() {
+    std::cerr << "isVoid not implemented\n";
     assert(0);
   }
   // 为了区分, 我们为每个 AST 节点(label)生成一个唯一的 ID
@@ -85,7 +101,10 @@ class BaseAST {
       ir = "\tstore " + std::to_string(ret1.first.number) + ", @" + symbol_table.getUniqueIdent(ret2.first.ident) + "\n";
     } else if(ret1.second == RetType::INDEX) {
       ir = "\tstore %" + std::to_string(ret1.first.number) + ", @" + symbol_table.getUniqueIdent(ret2.first.ident) + "\n";
-    } else {
+    } else if(ret1.second == RetType::IDENT) {
+      ir = "\tstore @" + symbol_table.getUniqueIdent(ret1.first.ident) + ", @" + symbol_table.getUniqueIdent(ret2.first.ident) + "\n";
+    } 
+    else {
       std::cerr << "storeIR: unknown ret1 type\n";
       assert(0);
     }
@@ -108,8 +127,10 @@ class BaseAST {
     if(isEnd(ir)) {
       return "";
     }
-    std::string ir = "\t@" + symbol_table.getUniqueIdent(ident) + " = alloc i32\n";
-    return ir;
+    if(!symbol_table.isGlobal())
+      return "\t@" + symbol_table.getUniqueIdent(ident) + " = alloc i32\n";
+    
+    return "global @" + symbol_table.getUniqueIdent(ident) + " = alloc i32, "; // global variable, 不写换行, 后面会写初始化
   }
   virtual std::string brIR(ret_value_t ret, std::string label1, std::string label2) const {
     if(isEnd(ir)) {
@@ -136,36 +157,79 @@ class BaseAST {
     return "\tjump %" + label + "\n";
   }
 
+  virtual std::string get_last_instruction(std::string &ir) const {
+    // 从最后一个换行符开始向前找倒数第二个换行符
+      size_t last_newline = ir.find_last_of('\n');
+      if (last_newline == std::string::npos || last_newline == 0) {
+          // 如果没有找到换行符或者只有一个换行符，则说明没有有效的指令
+          return "";
+      }
+
+      size_t second_last_newline = ir.find_last_of('\n', last_newline - 1);
+      if (second_last_newline == std::string::npos) {
+          // 如果找不到倒数第二个换行符，说明只有一行指令
+          second_last_newline = 0;
+      } else {
+          // 否则将第二个换行符位置移到下一个字符，开始提取最后一条指令
+          second_last_newline += 1;
+      }
+
+      // 提取最后一条指令
+      std::string last_instruction = ir.substr(second_last_newline, last_newline - second_last_newline);
+      last_instruction.erase(std::remove_if(last_instruction.begin(), last_instruction.end(), ::isspace), last_instruction.end());
+      return last_instruction;
+  }
+
   // 为了防止在生成 IR 时在终止指令（ret、br、jump）之后还有其他指令，我们需要从ir中提取出最后一条指令，当前ir的最后一个字符一定是换行符(即倒数第二个换行符后到最后一个换行符之间的内容)，并返回是否是终止指令（bool)
-  virtual bool isEnd(std::string &ir) const {
-        // 从最后一个换行符开始向前找倒数第二个换行符
-        size_t last_newline = ir.find_last_of('\n');
-        if (last_newline == std::string::npos || last_newline == 0) {
-            // 如果没有找到换行符或者只有一个换行符，则说明没有有效的指令
-            return false;
-        }
-
-        size_t second_last_newline = ir.find_last_of('\n', last_newline - 1);
-        if (second_last_newline == std::string::npos) {
-            // 如果找不到倒数第二个换行符，说明只有一行指令
-            second_last_newline = 0;
-        } else {
-            // 否则将第二个换行符位置移到下一个字符，开始提取最后一条指令
-            second_last_newline += 1;
-        }
-
-        // 提取最后一条指令
-        std::string last_instruction = ir.substr(second_last_newline, last_newline - second_last_newline);
-
-        // 检查是否是终止指令
-        last_instruction.erase(std::remove_if(last_instruction.begin(), last_instruction.end(), ::isspace), last_instruction.end());
-        return (last_instruction.compare(0, 3, "ret") == 0) ||
-               (last_instruction.compare(0, 2, "br") == 0) ||
-               (last_instruction.compare(0, 4, "jump") == 0);
+  virtual bool isEnd(std::string &ir, int option = 0) const { // option = 0 表示检查是否是终止指令，option = 1 表示检查是否是ret指令, option = 2 表示检查ret指令是否有返回值
+    // 获取最后一条指令
+    std::string last_instruction = get_last_instruction(ir);
+  
+    // 检查是否是ret指令
+    if (option == 1) {
+        return last_instruction.compare(0, 3, "ret") == 0;
+    }
+    // 检查是否是ret指令且有返回值(可以通过ret指令的最后一个字符是否是数字来判断)
+    if (option == 2) {
+        return last_instruction.compare(0, 3, "ret") == 0 && isdigit(last_instruction.back());
     }
 
+    // 检查是否是终止指令
+    return (last_instruction.compare(0, 3, "ret") == 0) ||
+            (last_instruction.compare(0, 2, "br") == 0) ||
+            (last_instruction.compare(0, 4, "jump") == 0);
+  }
 
-
+    // args 是参数列表，默认为空
+    virtual std::string callIR(std::string &func_name, std::vector<ret_value_t> args = {} ) const {
+        if(isEnd(ir)) {
+            return "";
+        }
+        std::string ir;
+        // 查询函数返回值类型
+        if(symbol_table.isVoid(func_name)) {
+            ir = "\tcall @" + func_name + "(";
+        } else {
+            ir = "\t%" + std::to_string(global_var_index++) + " = call @" + func_name + "(";
+        }
+        for (int i = 0; i < args.size(); i++) {
+            if (args[i].second == RetType::NUMBER) {
+                ir +=  std::to_string(args[i].first.number);
+            } else if (args[i].second == RetType::INDEX) {
+                ir += "%" + std::to_string(args[i].first.number);
+            } else if (args[i].second == RetType::IDENT) {
+                ir += "@" + symbol_table.getUniqueIdent(args[i].first.ident);
+            } else {
+                std::cerr << "callIR: unknown arg type\n";
+                assert(0);
+            }
+            if (i != args.size() - 1) {
+                ir += ", ";
+            }
+        }
+        ir += ")\n";
+        return ir;
+    }
 };
 
 typedef std::vector<std::pair<ListType, std::unique_ptr<BaseAST>>> List;
