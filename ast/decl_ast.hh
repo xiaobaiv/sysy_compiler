@@ -131,7 +131,10 @@ public:
         }
         // 插入符号表，简单情况，没有数组
         if(const_exp_list.size() == 0) { 
-            symbol_table.insert(ident, {Item::Type::CONST, const_init_val->calc()});
+          if(!symbol_table.insert(ident, {Item::Type::CONST, const_init_val->calc()})) {
+            std::cerr << "ConstDefAST: redefined constant" << std::endl;
+            assert(0);
+          }
         } else {
           std::cerr << "ConstDefAST: array not supported" << std::endl;
           assert(0);
@@ -319,6 +322,10 @@ public:
         assert(0);
       }
       ir += allocIR(ident);
+      // 检查是否是全局变量，如果是全局变量，需要初始化为0
+      if(symbol_table.isGlobal()) {
+        ir += "zeroinit\n";
+      }
     } else if(type == Type::INIT) { // VarDef        ::= IDENT {"[" ConstExp "]"} "=" InitVal;
       // 插入符号表，简单情况，没有数组
       if(const_exp_list.size() == 0) {
@@ -327,8 +334,17 @@ public:
           assert(0);
         }
         ir += allocIR(ident);
+        // 检查是否是全局变量，如果是全局变量，不使用storeIR
         ret_value_t ret = init_val->toIR(ir);
-        ir += storeIR(ret, {RetValue(ident), RetType::INDEX});
+        if(symbol_table.isGlobal()) {
+          if(ret.second == RetType::NUMBER) {
+            ir += std::to_string(ret.first.number) + "\n";
+          } else {
+            std::cerr << "VarDefAST: Global variables can only be initialized by constants." << std::endl;
+          }
+        } else {
+          ir += storeIR(ret, {ident, RetType::IDENT});
+        }
       } else {
         std::cerr << "VarDefAST: array not supported" << std::endl;
         assert(0);
