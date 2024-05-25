@@ -40,7 +40,8 @@ public:
     // 符号表 static std::unordered_map<std::string, int> symbol_table;
     if (exp_list.size() == 0) {
       if (symbol_table.find(ident) == nullptr) {
-        std::cerr << "LValAST::toIR: undefined ident " << ident << std::endl;
+        std::cerr << "LValAST::toIR: undefined ident: " << ident << std::endl;
+        symbol_table.print();
         assert(0);
       }
       if(symbol_table.isConst(ident)) {
@@ -244,9 +245,39 @@ public:
         std::cerr << "UnaryExpAST::toIR: unknown op" << std::endl;
         assert(0);
       }
-    } else if(type == Type::IDENT) { // FunCall ::= "call" SYMBOL "(" [Value {"," Value}] ")";
-      std::cerr << "UnaryExpAST::toIR: IDENT" << std::endl;
-      assert(0);
+    } else if(type == Type::IDENT) { // FunCall ::= "call" SYMBOL "(" [Value {"," Value}] ")"; ######  IDENT "(" [FuncRParams] ")"
+      if(option == Option::F0) {
+        if(symbol_table.find(ident) == nullptr) {
+          symbol_table.print();
+          std::cerr << "UnaryExpAST::toIR: undefined ident: " << ident << std::endl;
+          assert(0);
+        }
+        if(symbol_table.isFunc(ident)) { // IDENT "(" ")"
+          ir += callIR(ident);
+          // 返回值
+          return {global_var_index - 1, RetType::INDEX};
+        } else {
+          std::cerr << "UnaryExpAST::toIR: not a function: " << ident << std::endl;
+          assert(0);
+        }
+      } else if(option == Option::F1) {
+        if(symbol_table.find(ident) == nullptr) {
+          std::cerr << "UnaryExpAST::toIR: undefined ident: " << ident << std::endl;
+          assert(0);
+        }
+        if(symbol_table.isFunc(ident)) {
+          std::vector<ret_value_t> args;
+          func_r_params->readArgs(args);
+          ir += callIR(ident, args);
+          return {global_var_index - 1, RetType::INDEX};
+        } else {
+          std::cerr << "UnaryExpAST::toIR: not a function: " << ident << std::endl;
+          assert(0);
+        }
+      } else {
+        std::cerr << "UnaryExpAST::toIR: unknown option" << std::endl;
+        assert(0);
+      }
     } else {
       std::cerr << "UnaryExpAST::toIR: unknown type" << std::endl;
       assert(0);
@@ -314,6 +345,12 @@ public:
     }
   }
 
+  // 记录参数的ret_value_t, 到vectoe中
+  void readArgs(std::vector<ret_value_t> &args) override {
+    for(auto &item : exp_list) {
+      args.push_back(item.second->toIR(ir));
+    }
+  }
 
 
   void Dump() const override {
