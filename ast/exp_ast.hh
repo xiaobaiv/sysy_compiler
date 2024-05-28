@@ -67,7 +67,6 @@ public:
     }
     if (symbol_table.isArray(ident))
     {
-      std::cout << ident << " is an array" << std::endl;
       std::vector<ret_value_t> indexs = {};
       for (auto &exp : exp_list)
       {
@@ -101,7 +100,6 @@ public:
     }
     if (symbol_table.isPtr(ident))
     {
-      std::cout << ident << " is a pointer" << std::endl;
       std::vector<ret_value_t> indexs = {};
       for (auto &exp : exp_list)
       {
