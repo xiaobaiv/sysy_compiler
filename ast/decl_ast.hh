@@ -1,3 +1,4 @@
+#pragma once
 #include "base_ast.hh"
 
 class DeclAST : public BaseAST { // Decl          ::= ConstDecl | VarDecl;
@@ -129,16 +130,6 @@ public:
         for(auto &item : _const_exp_list) {
             const_exp_list.push_back(std::make_pair(item.first, std::move(item.second)));
         }
-        // 插入符号表，简单情况，没有数组
-        if(const_exp_list.size() == 0) { 
-          if(!symbol_table.insert(ident, {Item::Type::CONST, const_init_val->calc()})) {
-            std::cerr << "ConstDefAST: redefined constant" << std::endl;
-            assert(0);
-          }
-        } else {
-          std::cerr << "ConstDefAST: array not supported" << std::endl;
-          assert(0);
-        }
     }
   
     ret_value_t toIR(std::string &ir) override {
@@ -146,8 +137,23 @@ public:
             // 插入符号表，简单情况，没有数组,不生成指令，只插入符号表
            symbol_table.insert(ident, {Item::Type::CONST, const_init_val->calc()});
         } else {
-            std::cerr << "ConstDefAST: array not supported" << std::endl;
-            assert(0);
+            std::vector<int> array_size;
+
+            for(auto &item : const_exp_list) {
+                array_size.push_back(item.second->calc());
+            }
+            symbol_table.insert(ident, {Item::Type::CARRAY, static_cast<int>(array_size.size())});
+
+            // 
+            int length = 1;
+            for(auto &item : array_size) {
+                length *= item;
+            }
+            std::vector<int> init_list(length, 0);
+            const_init_val->calc(init_list, 0, length, array_size, static_cast<int>(array_size.size()));
+
+            // 向 ir 中添加初始化数组的指令
+            ir += allocArrayIR(ident, array_size, init_list);
         }
         return {0, RetType::VOID};
     }
@@ -207,6 +213,70 @@ public:
             assert(0);
         }
     }
+    bool isArray() override {
+        return type == Type::ARRAY;
+    }
+
+    void calc(std::vector<int> &init_list , int start_index, int end_index, std::vector<int> &array_size, int sub_array_size ) override { // 一定是数组
+        int ptr = 0;
+        for(auto &item : const_init_val_list) {
+          if(item.second->isArray()) {
+            // 判断{}的层次
+            if(ptr == 0) {
+              /* 
+              ** 1. new_start_index = start_index;
+              ** 2. new_sub_array_size = sub_array_size - 1;
+              ** 3. new_end_index = start_index + array_size[array_size.size() - 1] * array_size[array_size.size() - 2] * ... * array_size[array_size.size() - new_sub_array_size];
+              ** 4. item
+              ** 
+                */ 
+              int new_start_index = start_index;
+              int new_sub_array_size = sub_array_size - 1;
+              int length = 1;
+              for(int i = array_size.size() - 1; i >= array_size.size() - new_sub_array_size; i--) {
+                length *= array_size[i];
+              }
+              int new_end_index = start_index + length;
+              item.second->calc(init_list, new_start_index, new_end_index, array_size, new_sub_array_size);
+              
+              ptr += length;
+              // std::cout << ptr<<std::endl;
+              // std::cout << "length = " << length << " new_start_index = " << new_start_index << " new_end_index = " << new_end_index << " new_sub_array_size = " << new_sub_array_size << std::endl;
+            }
+            else { // ptr > 0, 自 array_size 的最后一个元素开始，判断到最长可以整除的长度
+              int new_sub_array_size = 0;
+              int tmp_ptr = ptr;
+              while(tmp_ptr != 0 && array_size.size() - new_sub_array_size - 1 >= 0 && (tmp_ptr) % array_size[array_size.size() - new_sub_array_size - 1] == 0) {
+                new_sub_array_size++;
+                tmp_ptr /= array_size[array_size.size() - new_sub_array_size - 1];
+              }
+              // 有可能列表初始化时非法的，也就是说ptr不是array_size的整数倍
+              if(new_sub_array_size == 0) {
+                std::cerr << "ConstInitValAST: array initialization error" << std::endl;
+                assert(0);
+              }
+
+              int new_start_index = start_index + ptr;
+              int length = 1;
+              for(int i = array_size.size() - 1; i >= array_size.size() - new_sub_array_size; i--) {
+                length *= array_size[i];
+              }
+              int new_end_index = new_start_index + length;
+              item.second->calc(init_list, new_start_index, new_end_index, array_size, new_sub_array_size);
+              ptr += length;
+              // std::cout << ptr<<std::endl;
+              // std::cout << "length = " << length << " new_start_index = " << new_start_index << " new_end_index = " << new_end_index << " new_sub_array_size = " << new_sub_array_size << std::endl;
+            }
+
+          } 
+          else {
+            init_list[start_index + ptr] = item.second->calc();
+            ptr++;
+          }
+        }
+        
+    }
+
     void Dump() const override {
         std::cout << "ConstInitValAST { ";
         switch (type) {
@@ -317,15 +387,30 @@ public:
   ret_value_t toIR(std::string &ir) override {
     if(type == Type::IDENT) { // VarDef        ::= IDENT {"[" ConstExp "]"} ;
       // 插入符号表，简单情况，没有数组
-      if(!symbol_table.insert(ident, {Item::Type::VAR, -1})) {
-        std::cerr << "VarDefAST: redefined variable" << std::endl;
-        assert(0);
-      }
-      ir += allocIR(ident);
-      // 检查是否是全局变量，如果是全局变量，需要初始化为0
-      if(symbol_table.isGlobal()) {
-        ir += "zeroinit\n";
-      }
+        if(const_exp_list.size() == 0) {
+          if(!symbol_table.insert(ident, {Item::Type::VAR, -1})) {
+            std::cerr << "VarDefAST: redefined variable" << std::endl;
+            assert(0);
+          }
+          ir += allocIR(ident);
+          // 检查是否是全局变量，如果是全局变量，需要初始化为0
+          if(symbol_table.isGlobal()) {
+            ir += "zeroinit\n";
+          }
+        } else { // 数组
+          if(!symbol_table.insert(ident, {Item::Type::VARRAY, static_cast<int>(const_exp_list.size())})) {
+            std::cerr << "VarDefAST: redefined variable" << std::endl;
+            assert(0);
+          }
+          std::vector<int> array_size;
+          for(auto &item : const_exp_list) {
+            array_size.push_back(item.second->calc());
+          }
+          ir += allocArrayIR(ident, array_size);
+        }
+
+      
+
     } else if(type == Type::INIT) { // VarDef        ::= IDENT {"[" ConstExp "]"} "=" InitVal;
       // 插入符号表，简单情况，没有数组
       if(const_exp_list.size() == 0) {
@@ -345,9 +430,22 @@ public:
         } else {
           ir += storeIR(ret, {ident, RetType::IDENT});
         }
-      } else {
-        std::cerr << "VarDefAST: array not supported" << std::endl;
-        assert(0);
+      } else { // 数组
+        if(!symbol_table.insert(ident, {Item::Type::VARRAY, static_cast<int>(const_exp_list.size())})) {
+          std::cerr << "VarDefAST: redefined variable" << std::endl;
+          assert(0);
+        }
+        std::vector<int> array_size;
+        for(auto &item : const_exp_list) {
+          array_size.push_back(item.second->calc());
+        }
+        int length = 1;
+        for(auto &item : array_size) {
+            length *= item;
+        }
+        std::vector<int> init_list(length, 0);
+        init_val->calc(init_list, 0, length, array_size, array_size.size());
+        ir += allocArrayIR(ident, array_size, init_list);
       }
     } else {
       std::cerr << "VarDefAST: unknown type" << std::endl;
@@ -435,6 +533,77 @@ public:
         }
         type = Type::ARRAY;
     }
+    bool isArray() override {
+        return type == Type::ARRAY;
+    }
+    int calc() override {
+        if(type == Type::EXP) {
+            return exp->calc();
+        } else {
+            std::cerr << "InitValAST: array not supported" << std::endl;
+            assert(0);
+        }
+    }
+    void calc(std::vector<int> &init_list , int start_index, int end_index, std::vector<int> &array_size, int sub_array_size ) override { // 一定是数组
+        int ptr = 0;
+        for(auto &item : init_val_list) {
+          if(item.second->isArray()) {
+            // 判断{}的层次
+            if(ptr == 0) {
+              /* 
+              ** 1. new_start_index = start_index;
+              ** 2. new_sub_array_size = sub_array_size - 1;
+              ** 3. new_end_index = start_index + array_size[array_size.size() - 1] * array_size[array_size.size() - 2] * ... * array_size[array_size.size() - new_sub_array_size];
+              ** 4. item
+              ** 
+                */ 
+              int new_start_index = start_index;
+              int new_sub_array_size = sub_array_size - 1;
+              int length = 1;
+              for(int i = array_size.size() - 1; i >= array_size.size() - new_sub_array_size; i--) {
+                length *= array_size[i];
+              }
+              int new_end_index = start_index + length;
+              item.second->calc(init_list, new_start_index, new_end_index, array_size, new_sub_array_size);
+              
+              ptr += length;
+              // std::cout << ptr<<std::endl;
+              // std::cout << "length = " << length << " new_start_index = " << new_start_index << " new_end_index = " << new_end_index << " new_sub_array_size = " << new_sub_array_size << std::endl;
+            }
+            else { // ptr > 0, 自 array_size 的最后一个元素开始，判断到最长可以整除的长度
+              int new_sub_array_size = 0;
+              int tmp_ptr = ptr;
+              while(tmp_ptr != 0 && array_size.size() - new_sub_array_size - 1 >= 0 && (tmp_ptr) % array_size[array_size.size() - new_sub_array_size - 1] == 0) {
+                new_sub_array_size++;
+                tmp_ptr /= array_size[array_size.size() - new_sub_array_size - 1];
+              }
+              // 有可能列表初始化时非法的，也就是说ptr不是array_size的整数倍
+              if(new_sub_array_size == 0) {
+                std::cerr << "ConstInitValAST: array initialization error" << std::endl;
+                assert(0);
+              }
+
+              int new_start_index = start_index + ptr;
+              int length = 1;
+              for(int i = array_size.size() - 1; i >= array_size.size() - new_sub_array_size; i--) {
+                length *= array_size[i];
+              }
+              int new_end_index = new_start_index + length;
+              item.second->calc(init_list, new_start_index, new_end_index, array_size, new_sub_array_size);
+              ptr += length;
+              // std::cout << ptr<<std::endl;
+              // std::cout << "length = " << length << " new_start_index = " << new_start_index << " new_end_index = " << new_end_index << " new_sub_array_size = " << new_sub_array_size << std::endl;
+            }
+
+          } 
+          else {
+            init_list[start_index + ptr] = item.second->calc();
+            ptr++;
+          }
+        }
+        
+    }
+
     ret_value_t toIR(std::string &ir) override {
         if(type == Type::EXP) {
             return exp->toIR(ir);

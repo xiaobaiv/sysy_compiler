@@ -1,3 +1,4 @@
+#pragma once
 #include "base_ast.hh"
 
 class FuncDefAST : public BaseAST { // FuncDef       ::= FuncType IDENT "(" [FuncFParams] ")" Block;
@@ -199,13 +200,53 @@ public:
       ir += "@" + symbol_table.getUniqueIdent("param_" + ident) + ": i32";
 
     } else if(option == Option::C1) { // FuncFParam    ::= BType IDENT "[" "]" {"[" ConstExp "]"};
-       std::cerr << "FuncFParamAST::toIR: array not implemented" << std::endl;
+       // 数组参数，实际上是一个指针，需要在函数内部分配内存。例如：int f(int arr[]) { return arr[1]; } 生成的ir代码如下
+        /*  fun @f(@arr: *i32): i32 {
+            %entry:
+              %arr = alloc *i32
+              store @arr, %arr
+              %0 = load %arr
+              %1 = getptr %0, 1
+              %2 = load %1
+              ret %2
+            } */
+      if(!symbol_table.insert("param_" + ident, {Item::Type::PTR, 0})) // 检查全局变量或函数是否重名
+      {
+        std::cerr << "FuncFParamAST::toIR: variable (ptr)name " << ident << " already exists" << std::endl;
+        assert(0);
+      }
+      std::vector<int> dims;
+      for(auto &item : const_exp_list) {
+        dims.push_back(item.second->calc());
+      }
+      // 生成参数的ir代码
+      // 解析dims
+      ir += "@" + symbol_table.getUniqueIdent("param_" + ident) + ": ";
+      ir += genDim(dims);
     } else {
       std::cerr << "FuncFParamAST::toIR: unknown option" << std::endl;
     }
     return {0, RetType::VOID};
   }
+  std::string genDim(std::vector<int> &size) {
+    std::string ir = "*";
+    // 生成数组的维度部分
+    if (size.size() == 0) {
+        return "*i32";
+    }
+    for(size_t i = 0; i < size.size(); ++i) {
+        ir += "[";  // 开始一层新的维度
+    }
 
+    // 添加最内层类型
+    ir += "i32";
+
+    // 从内向外填充维度大小
+    for(auto it = size.rbegin(); it != size.rend(); ++it) {
+        ir += ", " + std::to_string(*it) + "]";
+    }
+    return ir;
+  }
   // 在块中将形参存入内存
   void xx(std::string &ir) override {
     if(option == Option::C0) { // FuncFParam    ::= BType IDENT ;
@@ -216,7 +257,16 @@ public:
       ir += allocIR(ident);
       ir += storeIR({"param_" + ident, RetType::IDENT}, {ident, RetType::IDENT});
     } else if(option == Option::C1) { // FuncFParam    ::= BType IDENT "[" "]" {"[" ConstExp "]"};
-       std::cerr << "FuncFParamAST::toIR: array not implemented" << std::endl;
+      if(!symbol_table.insert(ident, {Item::Type::PTR, static_cast<int>(const_exp_list.size() + 1)})) { // 检查全局变量或函数是否重名
+        std::cerr << "FuncFParamAST::toIR: variable name: " << ident << " already exists" << std::endl;
+        assert(0);
+      }
+      std::vector<int> dims;
+      for(auto &item : const_exp_list) {
+        dims.push_back(item.second->calc());
+      }
+      ir += allocIR(ident, genDim(dims));
+      ir += storeIR({"param_" + ident, RetType::IDENT}, {ident, RetType::IDENT});
     } else {
       std::cerr << "FuncFParamAST::toIR: unknown option" << std::endl;
     }
@@ -399,13 +449,17 @@ public:
         } else if (ret.second == RetType::IDENT) {
           ir += loadIR(ret);
           ir += "\tret %" + std::to_string(global_var_index - 1) + "\n";
-        } else {
+        } else if (ret.second == RetType::ARRAYPTR) {
+          ir += "\tret %ptr" + std::to_string(ret.first.number) + "\n";
+        }
+        else {
           std::cerr << "StmtAST::toIR: unknown ret type" << std::endl;
         }
       } 
     } else if(type == Type::ASSIGN) {
       ret_value_t exp_ret = exp->toIR(ir);
       ret_value_t lval_ret = lval->toIR(ir);
+      std::cout << "debug \n";
       ir += storeIR(exp_ret, lval_ret);
     } else if(type == Type::EXP) {
       if(option == Option::EXP1) {

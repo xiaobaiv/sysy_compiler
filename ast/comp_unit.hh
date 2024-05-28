@@ -1,3 +1,4 @@
+#pragma once
 #include "base_ast.hh"
 
 class CompUnitAST : public BaseAST { // CompUnit      ::= [CompUnit] (Decl | FuncDef);

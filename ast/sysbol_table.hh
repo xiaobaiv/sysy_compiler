@@ -1,3 +1,4 @@
+#pragma once
 #include <vector>
 #include <unordered_map>
 #include <map>
@@ -17,14 +18,16 @@
 * let's start!
  */class Item {
 public:
-    enum class Type {CONST, VAR, FUNC};
+    enum class Type {CONST, VAR, FUNC, CARRAY, VARRAY, PTR};
     Type type;
     int value;
-    Item(Type type, int value): type(type), value(value) {} // 如果是函数的话，value表示FuncType，如果FuncType是0表示void，否则表示int类型
+    Item(Type type, int value): type(type), value(value) {} // 如果是函数的话，value表示FuncType，如果FuncType是0表示void，否则表示int类型, 如果是数组的话，value表示数组的维度长度（方括号的个数）
     Item() {}
     bool isConst() { return type == Type::CONST; }
     bool isVar() { return type == Type::VAR; }
     bool isFunc() { return type == Type::FUNC; }
+    bool isPtr() { return type == Type::PTR; }
+    bool isArray() { return type == Type::CARRAY || type == Type::VARRAY;}
     int getValue() { return value; }
 };
 
@@ -96,6 +99,16 @@ public:
         if (item == nullptr) return false;
         return item->getValue() == 0;
     }
+    bool isPtr(std::string ident) {
+        Item* item = find(ident);
+        if (item == nullptr) return false;
+        return item->isPtr();
+    }
+    bool isArray(std::string ident) {
+        Item* item = find(ident);
+        if (item == nullptr) return false;
+        return item->isArray();
+    }
     void push() {
         tables.emplace_back(only_increase_index++);
     }
@@ -110,6 +123,10 @@ public:
                 x = tables[i].index;
                 break;
             }
+        }
+        if(x == 999)
+        {
+            print();
         }
         return ident + "_" + std::to_string(x);
     }
