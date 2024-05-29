@@ -8,7 +8,8 @@
 #include <cassert>
 #include "koopa.h"
 #include "/root/compiler/sysy-make-template/ast/ast.hh"
-#include "ir2riscv.hh"
+
+#include "riscv.hh"
 using namespace std;
 
 // 声明 lexer 的输入, 以及 parser 函数
@@ -110,15 +111,8 @@ int main(int argc, char *argv[]) {
             return -1;
         }
     } else if (mode == "-riscv" || mode == "-perf") {
-        string riscv = ir2riscv(ir);
-        ofstream riscvFile(output, ios::out | ios::trunc);
-        if (riscvFile.is_open()) {
-            riscvFile << riscv;
-            riscvFile.close();
-        } else {
-            cerr << "Cannot open output file: " << output << endl;
-            return -1;
-        }
+        RISCV_Builder riscv(output.c_str());
+        riscv.build(ir);
     }
 //    ast->symbol_table.print();
     return 0;
