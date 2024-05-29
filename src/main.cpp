@@ -111,7 +111,7 @@ int main(int argc, char *argv[]) {
             return -1;
         }
     } else if (mode == "-riscv" || mode == "-perf") {
-        RISCV_Builder riscv(output.c_str());
+        RiscV riscv(output.c_str());
         riscv.build(ir);
     }
 //    ast->symbol_table.print();
